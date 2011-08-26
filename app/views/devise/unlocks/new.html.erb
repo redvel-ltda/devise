@@ -1,12 +1,12 @@
-<h2>Resend unlock instructions</h2>
+<h2><%= t 'devise.views.unlocks.new.submit' %></h2>
 
 <%= form_for(resource, :as => resource_name, :url => unlock_path(resource_name), :html => { :method => :post }) do |f| %>
   <%= devise_error_messages! %>
 
-  <div><%= f.label :email %><br />
-  <%= f.email_field :email %></div>
+  <p><%= f.label :email, t('devise.attributes.email') %><br />
+  <%= f.email_field :email %></p>
 
-  <div><%= f.submit "Resend unlock instructions" %></div>
+  <p><%= f.submit t('devise.views.unlocks.new.submit') %></p>
 <% end %>
 
 <%= render :partial => "devise/shared/links" %>
