@@ -17,17 +17,6 @@ module Devise
       Devise.include_helpers(Devise::Controllers)
     end
 
-    initializer "devise.auth_keys" do
-      if Devise.authentication_keys.size > 1
-        puts "[DEVISE] You are configuring Devise to use more than one authentication key. " \
-          "In previous versions, we automatically added #{Devise.authentication_keys[1..-1].inspect} " \
-          "as scope to your e-mail validation, but this was changed now. If you were relying in such " \
-          "behavior, you should remove :validatable from your models and add the validations manually. " \
-          "To get rid of this warning, you can comment config.authentication_keys in your initializer " \
-          "and pass the current values as key to the devise call in your model."
-      end
-    end
-
     initializer "devise.omniauth" do |app|
       Devise.omniauth_configs.each do |provider, config|
         app.middleware.use config.strategy_class, *config.args do |strategy|
@@ -49,6 +38,37 @@ module Devise
             "its usual uniqueness and format validations for the email field. It is recommended " \
             "that you upgrade to Mongoid 2.1+ for this and other fixes, but if for some reason you " \
             "are unable to do so, you should add these validations manually.\n"
+        end
+      end
+    end
+
+    initializer "devise.deprecations" do
+      unless defined?(Rails::Generators)
+        if Devise.case_insensitive_keys == false
+          warn "\n[DEVISE] Devise.case_insensitive_keys is false which is no longer " \
+            "supported. If you want to continue running on this mode, please ensure " \
+            "you are not using validatable (you can copy the validations directly to your model) " \
+            "and set case_insensitive_keys to an empty array.\n"
+        end
+
+        if Devise.apply_schema && defined?(Mongoid)
+          warn "\n[DEVISE] Devise.apply_schema is true. This means Devise was " \
+            "automatically configuring your DB. This no longer happens. You should " \
+            "set Devise.apply_schema to false and manually set the fields used by Devise as shown here: " \
+            "https://github.com/plataformatec/devise/wiki/How-To:-Upgrade-to-Devise-2.0-migration-schema-style\n"
+        end
+
+        # TODO: Deprecate the true value of this option as well
+        if Devise.use_salt_as_remember_token == false
+          warn "\n[DEVISE] Devise.use_salt_as_remember_token is false which is no longer " \
+            "supported. Devise now only uses the salt as remember token and the remember_token " \
+            "column can be removed from your models.\n"
+        end
+
+        if Devise.reset_password_within.nil?
+          warn "\n[DEVISE] Devise.reset_password_within is nil. Please set this value to " \
+            "an interval (for example, 6.hours) and add a reset_password_sent_at field to " \
+            "your Devise models (if they don't have one already).\n"
         end
       end
     end

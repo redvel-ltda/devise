@@ -38,6 +38,16 @@ class PasswordTest < ActionController::IntegrationTest
     assert_contain 'You will receive an email with instructions about how to reset your password in a few minutes.'
   end
 
+  test 'reset password with email should send an email from a custom mailer' do
+    create_user(:email => 'Foo@Bar.com')
+
+    User.any_instance.stubs(:devise_mailer).returns(Users::Mailer)
+    request_forgot_password do
+      fill_in 'email', :with => 'foo@bar.com'
+    end
+    assert_equal ['custom@example.com'], ActionMailer::Base.deliveries.last.from
+  end
+
   test 'reset password with email of different case should fail when email is NOT the list of case insensitive keys' do
     swap Devise, :case_insensitive_keys => [] do
       create_user(:email => 'Foo@Bar.com')
@@ -147,7 +157,7 @@ class PasswordTest < ActionController::IntegrationTest
     reset_password :reset_password_token => user.reload.reset_password_token
 
     assert_current_url '/'
-    assert_contain 'Your password was changed successfully.'
+    assert_contain 'Your password was changed successfully. You are now signed in.'
     assert user.reload.valid_password?('987654321')
   end
 
@@ -179,6 +189,8 @@ class PasswordTest < ActionController::IntegrationTest
     request_forgot_password
     reset_password :reset_password_token => user.reload.reset_password_token
 
+    assert_contain 'Your password was changed successfully.'
+    assert_not_contain 'You are now signed in.'
     assert_equal new_user_session_path, @request.path
     assert !warden.authenticated?(:user)
   end
@@ -204,6 +216,15 @@ class PasswordTest < ActionController::IntegrationTest
     post user_password_path(:format => 'xml'), :user => {:email => "invalid.test@test.com"}
     assert_response :unprocessable_entity
     assert response.body.include? %(<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<errors>)
+  end
+
+  test 'reset password request with invalid E-Mail in XML format should return empty and valid response' do
+    swap Devise, :paranoid => true do
+      create_user
+      post user_password_path(:format => 'xml'), :user => {:email => "invalid@test.com"}
+      assert_response :success
+      assert_equal response.body, { }.to_xml
+    end
   end
 
   test 'change password with valid parameters in XML format should return valid response' do
@@ -248,7 +269,7 @@ class PasswordTest < ActionController::IntegrationTest
       assert_not_contain "1 error prohibited this user from being saved:"
       assert_not_contain "Email not found"
       assert_contain "If your e-mail exists on our database, you will receive a password recovery link on your e-mail"
-      assert_current_url "/users/password"
+      assert_current_url "/users/sign_in"
     end
   end
 
@@ -260,7 +281,7 @@ class PasswordTest < ActionController::IntegrationTest
       click_button 'Send me reset password instructions'
 
       assert_contain "If your e-mail exists on our database, you will receive a password recovery link on your e-mail"
-      assert_current_url "/users/password"
+      assert_current_url "/users/sign_in"
     end
   end
 end

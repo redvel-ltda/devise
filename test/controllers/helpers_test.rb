@@ -45,6 +45,11 @@ class ControllerAuthenticatableTest < ActionController::TestCase
     @controller.authenticate_user!
   end
 
+  test 'proxy authenticate_user! options to authenticate with user scope' do
+    @mock_warden.expects(:authenticate!).with(:scope => :user, :recall => "foo")
+    @controller.authenticate_user!(:recall => "foo")
+  end
+
   test 'proxy authenticate_admin! to authenticate with admin scope' do
     @mock_warden.expects(:authenticate!).with(:scope => :admin)
     @controller.authenticate_admin!
@@ -123,6 +128,26 @@ class ControllerAuthenticatableTest < ActionController::TestCase
     @controller.sign_in(user, :bypass => true)
   end
 
+  test 'sign out clears up any signed in user from all scopes' do
+    user = User.new
+    @mock_warden.expects(:user).times(Devise.mappings.size)
+    @mock_warden.expects(:logout).with().returns(true)
+    @controller.instance_variable_set(:@current_user, user)
+    @controller.instance_variable_set(:@current_admin, user)
+    @controller.sign_out
+    assert_equal nil, @controller.instance_variable_get(:@current_user)
+    assert_equal nil, @controller.instance_variable_get(:@current_admin)
+  end
+
+  test 'sign out clears up any signed in user by scope' do
+    user = User.new
+    @mock_warden.expects(:user).with(:user).returns(user)
+    @mock_warden.expects(:logout).with(:user).returns(true)
+    @controller.instance_variable_set(:@current_user, user)
+    @controller.sign_out(:user)
+    assert_equal nil, @controller.instance_variable_get(:@current_user)
+  end
+  
   test 'sign out proxy to logout on warden' do
     @mock_warden.expects(:user).with(:user).returns(true)
     @mock_warden.expects(:logout).with(:user).returns(true)
@@ -201,17 +226,6 @@ class ControllerAuthenticatableTest < ActionController::TestCase
     @mock_warden.expects(:set_user).never
     @controller.expects(:redirect_to).with(admin_root_path)
     @controller.sign_in_and_redirect(admin)
-  end
-
-  test 'redirect_location returns the stored location if set' do
-    user = User.new
-    @controller.session[:"user_return_to"] = "/foo.bar"
-    assert_equal '/foo.bar', @controller.redirect_location('user', user)
-  end
-
-  test 'redirect_location returns the after sign in path by default' do
-    user = User.new
-    assert_equal @controller.after_sign_in_path_for(:user), @controller.redirect_location('user', user)
   end
 
   test 'sign out and redirect uses the configured after sign out path when signing out only the current scope' do

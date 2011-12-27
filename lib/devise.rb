@@ -6,12 +6,13 @@ require 'set'
 require 'securerandom'
 
 module Devise
-  autoload :FailureApp, 'devise/failure_app'
-  autoload :OmniAuth, 'devise/omniauth'
+  autoload :Delegator,   'devise/delegator'
+  autoload :FailureApp,  'devise/failure_app'
+  autoload :OmniAuth,    'devise/omniauth'
+  autoload :ParamFilter, 'devise/param_filter'
   autoload :PathChecker, 'devise/path_checker'
-  autoload :Schema, 'devise/schema'
+  autoload :Schema,      'devise/schema'
   autoload :TestHelpers, 'devise/test_helpers'
-  autoload :Email, 'devise/email'
 
   module Controllers
     autoload :Helpers, 'devise/controllers/helpers'
@@ -83,7 +84,7 @@ module Devise
   # False by default for backwards compatibility.
   mattr_accessor :case_insensitive_keys
   @@case_insensitive_keys = false
-  
+
   # Keys that should have whitespace stripped.
   # False by default for backwards compatibility.
   mattr_accessor :strip_whitespace_keys
@@ -105,11 +106,11 @@ module Devise
   mattr_accessor :http_authentication_realm
   @@http_authentication_realm = "Application"
 
-  # Email regex used to validate email formats. Based on RFC 822 and
-  # retrieved from Sixarm email validation gem
-  # (https://github.com/SixArm/sixarm_ruby_email_address_validation).
+  # Email regex used to validate email formats. It simply asserts that
+  # an one (and only one) @ exists in the given string. This is mainly
+  # to give user feedback and not to assert the e-mail validity.
   mattr_accessor :email_regexp
-  @@email_regexp = Devise::Email::EXACT_PATTERN
+  @@email_regexp = /\A[^@]+@([^@\.]+\.)+[^@\.]+\z/
 
   # Range validation for password length
   mattr_accessor :password_length
@@ -119,26 +120,22 @@ module Devise
   mattr_accessor :remember_for
   @@remember_for = 2.weeks
 
-  # If true, a valid remember token can be re-used between multiple browsers.
-  mattr_accessor :remember_across_browsers
-  @@remember_across_browsers = true
-
   # If true, extends the user's remember period when remembered via cookie.
   mattr_accessor :extend_remember_period
   @@extend_remember_period = false
 
-  # If true, uses salt as remember token and does not create it in the database.
-  # By default is false for backwards compatibility.
-  mattr_accessor :use_salt_as_remember_token
-  @@use_salt_as_remember_token = false
-
   # Time interval you can access your account before confirming your account.
-  mattr_accessor :confirm_within
-  @@confirm_within = 0.days
+  mattr_accessor :allow_unconfirmed_access_for
+  @@allow_unconfirmed_access_for = 0.days
 
-  # Defines which key will be used when confirming an account
+  # Defines which key will be used when confirming an account.
   mattr_accessor :confirmation_keys
   @@confirmation_keys = [ :email ]
+
+  # Defines if email should be reconfirmable.
+  # False by default for backwards compatibility.
+  mattr_accessor :reconfirmable
+  @@reconfirmable = false
 
   # Time interval to timeout the user session without activity.
   mattr_accessor :timeout_in
@@ -151,11 +148,6 @@ module Devise
   # Used to define the password encryption algorithm.
   mattr_accessor :encryptor
   @@encryptor = nil
-
-  # Tells if devise should apply the schema in ORMs where devise declaration
-  # and schema belongs to the same class (as Datamapper and Mongoid).
-  mattr_accessor :apply_schema
-  @@apply_schema = true
 
   # Scoped views. Since it relies on fallbacks to render default views, it's
   # turned off by default.
@@ -189,6 +181,7 @@ module Devise
   @@reset_password_keys = [ :email ]
 
   # Time interval you can reset your password with a reset password key
+  # Nil by default for backwards compatibility.
   mattr_accessor :reset_password_within
   @@reset_password_within = nil
 
@@ -204,9 +197,9 @@ module Devise
   mattr_accessor :token_authentication_key
   @@token_authentication_key = :auth_token
 
-  # If true, authentication through token does not store user in session
-  mattr_accessor :stateless_token
-  @@stateless_token = false
+  # Skip session storage for the following strategies
+  mattr_accessor :skip_session_storage
+  @@skip_session_storage = []
 
   # Which formats should be treated as navigational.
   # We need both :"*/*" and "*/*" to work on different Rails versions.
@@ -220,6 +213,33 @@ module Devise
   # The default method used while signing out
   mattr_accessor :sign_out_via
   @@sign_out_via = :get
+
+  # DEPRECATED CONFIG
+
+  # If true, uses salt as remember token and does not create it in the database.
+  # By default is false for backwards compatibility.
+  mattr_accessor :use_salt_as_remember_token
+  @@use_salt_as_remember_token = false
+
+  # Tells if devise should apply the schema in ORMs where devise declaration
+  # and schema belongs to the same class (as Datamapper and Mongoid).
+  mattr_accessor :apply_schema
+  @@apply_schema = true
+
+  def self.remember_across_browsers=(value)
+    warn "\n[DEVISE] Devise.remember_across_browsers is deprecated and has no effect. Please remove it.\n"
+  end
+
+  def self.confirm_within=(value)
+    warn "\n[DEVISE] Devise.confirm_within= is deprecated. Please set Devise.allow_unconfirmed_access_for= instead.\n"
+    Devise.allow_unconfirmed_access_for = value
+  end
+
+  def self.stateless_token=(value)
+    warn "\n[DEVISE] Devise.stateless_token= is deprecated. Please append :token_auth to Devise.skip_session_storage " \
+      "instead, for example: Devise.skip_session_storage << :token_auth\n"
+    Devise.skip_session_storage << :token_auth
+  end
 
   # PRIVATE CONFIGURATION
 
@@ -360,7 +380,7 @@ module Devise
   # initialization.
   #
   #  Devise.initialize do |config|
-  #    config.confirm_within = 2.days
+  #    config.allow_unconfirmed_access_for = 2.days
   #
   #    config.warden do |manager|
   #      # Configure warden to use other strategies, like oauth.
@@ -398,11 +418,17 @@ module Devise
     Rails::VERSION::STRING[0,3] != "3.0"
   end
 
+  # Regenerates url helpers considering Devise.mapping
+  def self.regenerate_helpers!
+    Devise::Controllers::UrlHelpers.remove_helpers!
+    Devise::Controllers::UrlHelpers.generate_helpers!
+  end
+
   # A method used internally to setup warden manager from the Rails initialize
   # block.
   def self.configure_warden! #:nodoc:
     @@warden_configured ||= begin
-      warden_config.failure_app   = Devise::FailureApp
+      warden_config.failure_app   = Devise::Delegator.new
       warden_config.default_scope = Devise.default_scope
       warden_config.intercept_401 = false
 

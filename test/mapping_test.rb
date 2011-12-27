@@ -31,6 +31,10 @@ class MappingTest < ActiveSupport::TestCase
     assert_equal "admin_area", Devise.mappings[:admin].path
   end
 
+  test 'allows to skip all routes' do
+    assert_equal [], Devise.mappings[:skip_admin].used_routes
+  end
+
   test 'sign_out_via defaults to :get' do
     assert_equal :get, Devise.mappings[:user].sign_out_via
   end
@@ -47,12 +51,12 @@ class MappingTest < ActiveSupport::TestCase
 
   test 'has strategies depending on the model declaration' do
     assert_equal [:rememberable, :token_authenticatable, :database_authenticatable], Devise.mappings[:user].strategies
-    assert_equal [:rememberable, :database_authenticatable], Devise.mappings[:admin].strategies
+    assert_equal [:database_authenticatable], Devise.mappings[:admin].strategies
   end
 
   test 'has no input strategies depending on the model declaration' do
     assert_equal [:rememberable, :token_authenticatable], Devise.mappings[:user].no_input_strategies
-    assert_equal [:rememberable], Devise.mappings[:admin].no_input_strategies
+    assert_equal [], Devise.mappings[:admin].no_input_strategies
   end
 
   test 'find scope for a given object' do
@@ -104,7 +108,6 @@ class MappingTest < ActiveSupport::TestCase
     assert mapping.authenticatable?
     assert mapping.recoverable?
     assert mapping.lockable?
-    assert_not mapping.confirmable?
     assert_not mapping.omniauthable?
   end
   

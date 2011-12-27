@@ -24,7 +24,7 @@ module Devise
 
       # Lock a user setting its locked_at to actual time.
       def lock_access!
-        self.locked_at = Time.now
+        self.locked_at = Time.now.utc
 
         if unlock_strategy_enabled?(:email)
           generate_unlock_token
@@ -49,7 +49,7 @@ module Devise
 
       # Send unlock instructions by email
       def send_unlock_instructions
-        ::Devise.mailer.unlock_instructions(self).deliver
+        self.devise_mailer.unlock_instructions(self).deliver
       end
 
       # Resend the unlock instructions if the user is locked.
@@ -79,25 +79,21 @@ module Devise
         # if the user can login or not (wrong password, etc)
         unlock_access! if lock_expired?
 
-        case (result = super)
-        when Symbol
-          return result
-        when TrueClass
+        if super
           self.failed_attempts = 0
           save(:validate => false)
-        when FalseClass
-          # PostgreSQL uses nil as the default value for integer columns set to 0
+          true
+        else
           self.failed_attempts ||= 0
           self.failed_attempts += 1
           if attempts_exceeded?
-            lock_access!
+            lock_access! unless access_locked?
             return :locked
           else
             save(:validate => false)
           end
+          false
         end
-
-        result
       end
 
       protected

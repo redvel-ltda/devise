@@ -25,9 +25,14 @@ module Devise
     #   * +params_authenticatable+: if this model allows authentication through request params. By default true.
     #     It also accepts an array specifying the strategies that should allow params authentication.
     #
+    #   * +skip_session_storage+: By default Devise will store the user in session.
+    #     You can skip storage for http and token auth by appending values to array:
+    #     :skip_session_storage => [:token_auth] or :skip_session_storage => [:http_auth, :token_auth],
+    #     by default is set to :skip_session_storage => [:http_auth].
+    #
     # == active_for_authentication?
     #
-    # Before authenticating a user and in each request, Devise checks if your model is active by
+    # After authenticating a user and in each request, Devise checks if your model is active by
     # calling model.active_for_authentication?. This method is overwriten by other devise modules. For instance,
     # :confirmable overwrites .active_for_authentication? to only return true if your model was confirmed.
     #
@@ -52,6 +57,9 @@ module Devise
       included do
         class_attribute :devise_modules, :instance_writer => false
         self.devise_modules ||= []
+
+        before_validation :downcase_keys
+        before_validation :strip_whitespace
       end
 
       # Check if the current object is valid for authentication. This method and
@@ -61,11 +69,7 @@ module Devise
       # However, you should not overwrite this method, you should overwrite active_for_authentication?
       # and inactive_message instead.
       def valid_for_authentication?
-        if active_for_authentication?
-          block_given? ? yield : true
-        else
-          inactive_message
-        end
+        block_given? ? yield : true
       end
 
       def active_for_authentication?
@@ -79,8 +83,34 @@ module Devise
       def authenticatable_salt
       end
 
+      def devise_mailer
+        Devise.mailer
+      end
+
+      def headers_for(name)
+        {}
+      end
+
+      def downcase_keys
+        (self.class.case_insensitive_keys || []).each { |k| self[k].try(:downcase!) }
+      end
+
+      def strip_whitespace
+        (self.class.strip_whitespace_keys || []).each { |k| self[k].try(:strip!) }
+      end
+
       module ClassMethods
-        Devise::Models.config(self, :authentication_keys, :request_keys, :strip_whitespace_keys, :case_insensitive_keys, :http_authenticatable, :params_authenticatable)
+        Devise::Models.config(self, :authentication_keys, :request_keys, :strip_whitespace_keys,
+          :case_insensitive_keys, :http_authenticatable, :params_authenticatable, :skip_session_storage)
+
+        def serialize_into_session(record)
+          [record.to_key, record.authenticatable_salt]
+        end
+
+        def serialize_from_session(key, salt)
+          record = to_adapter.get(key)
+          record if record && record.authenticatable_salt == salt
+        end
 
         def params_authenticatable?(strategy)
           params_authenticatable.is_a?(Array) ?
@@ -103,10 +133,11 @@ module Devise
         #   end
         #
         def find_for_authentication(conditions)
-          conditions = filter_auth_params(conditions.dup)
-          (case_insensitive_keys || []).each { |k| conditions[k].try(:downcase!) }
-          (strip_whitespace_keys || []).each { |k| conditions[k].try(:strip!) }
-          to_adapter.find_first(conditions)
+          find_first_by_auth_conditions(conditions)
+        end
+
+        def find_first_by_auth_conditions(conditions)
+          to_adapter.find_first devise_param_filter.filter(conditions)
         end
 
         # Find an initialize a record setting an error if it can't be found.
@@ -116,14 +147,11 @@ module Devise
 
         # Find an initialize a group of attributes based on a list of required attributes.
         def find_or_initialize_with_errors(required_attributes, attributes, error=:invalid) #:nodoc:
-          (case_insensitive_keys || []).each { |k| attributes[k].try(:downcase!) }
-          (strip_whitespace_keys || []).each { |k| attributes[k].try(:strip!) }
-
           attributes = attributes.slice(*required_attributes)
           attributes.delete_if { |key, value| value.blank? }
 
           if attributes.size == required_attributes.size
-            record = to_adapter.find_first(filter_auth_params(attributes))
+            record = find_first_by_auth_conditions(attributes)
           end
 
           unless record
@@ -141,16 +169,8 @@ module Devise
 
         protected
 
-        # Force keys to be string to avoid injection on mongoid related database.
-        def filter_auth_params(conditions)
-          conditions.each do |k, v|
-            conditions[k] = v.to_s if auth_param_requires_string_conversion?(v)
-          end if conditions.is_a?(Hash)
-        end
-        
-        # Determine which values should be transformed to string or passed as-is to the query builder underneath
-        def auth_param_requires_string_conversion?(value)
-          true unless value.is_a?(TrueClass) || value.is_a?(FalseClass) || value.is_a?(Fixnum)
+        def devise_param_filter
+          @devise_param_filter ||= Devise::ParamFilter.new(case_insensitive_keys, strip_whitespace_keys)
         end
 
         # Generate a token by looping and ensuring does not already exist.

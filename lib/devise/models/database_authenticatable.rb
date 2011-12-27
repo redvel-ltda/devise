@@ -25,8 +25,6 @@ module Devise
       included do
         attr_reader :password, :current_password
         attr_accessor :password_confirmation
-        before_validation :downcase_keys
-        before_validation :strip_whitespace
       end
 
       # Generates password encryption based on the given value.
@@ -45,13 +43,13 @@ module Devise
 
       # Set password and password confirmation to nil
       def clean_up_passwords
-        self.password = self.password_confirmation = ""
+        self.password = self.password_confirmation = nil
       end
 
       # Update record attributes when :current_password matches, otherwise returns
       # error on :current_password. It also automatically rejects :password and
       # :password_confirmation if they are blank.
-      def update_with_password(params={})
+      def update_with_password(params, *options)
         current_password = params.delete(:current_password)
 
         if params[:password].blank?
@@ -60,7 +58,7 @@ module Devise
         end
 
         result = if valid_password?(current_password)
-          update_attributes(params)
+          update_attributes(params, *options)
         else
           self.attributes = params
           self.valid?
@@ -73,16 +71,26 @@ module Devise
       end
 
       # Updates record attributes without asking for the current password.
-      # Never allows to change the current password
-      def update_without_password(params={})
+      # Never allows to change the current password. If you are using this
+      # method, you should probably override this method to protect other
+      # attributes you would not like to be updated without a password.
+      #
+      # Example:
+      #
+      #   def update_without_password(params={})
+      #     params.delete(:email)
+      #     super(params)
+      #   end
+      #
+      def update_without_password(params, *options)
         params.delete(:password)
         params.delete(:password_confirmation)
 
-        result = update_attributes(params)
+        result = update_attributes(params, *options)
         clean_up_passwords
         result
       end
-      
+
       def after_database_authentication
       end
 
@@ -92,15 +100,6 @@ module Devise
       end
 
     protected
-
-      # Downcase case-insensitive keys
-      def downcase_keys
-        (self.class.case_insensitive_keys || []).each { |k| self[k].try(:downcase!) }
-      end
-      
-      def strip_whitespace
-        (self.class.strip_whitespace_keys || []).each { |k| self[k].try(:strip!) }
-      end
 
       # Digests the password using bcrypt.
       def password_digest(password)

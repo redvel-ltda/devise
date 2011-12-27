@@ -4,7 +4,12 @@ module ActionDispatch::Routing
     # need devise_for mappings already declared to create filters and helpers.
     def finalize_with_devise!
       finalize_without_devise!
-      Devise.configure_warden!
+
+      @devise_finalized ||= begin
+        Devise.configure_warden!
+        Devise.regenerate_helpers!
+        true
+      end
     end
     alias_method_chain :finalize!, :devise
   end
@@ -44,23 +49,23 @@ module ActionDispatch::Routing
     #
     # You can configure your routes with some options:
     #
-    #  * :class_name => setup a different class to be looked up by devise,
-    #                   if it cannot be correctly find by the route name.
+    #  * :class_name => setup a different class to be looked up by devise, if it cannot be
+    #    properly found by the route name.
     #
     #      devise_for :users, :class_name => 'Account'
     #
     #  * :path => allows you to setup path name that will be used, as rails routes does.
-    #             The following route configuration would setup your route as /accounts instead of /users:
+    #    The following route configuration would setup your route as /accounts instead of /users:
     #
     #      devise_for :users, :path => 'accounts'
     #
-    #  * :singular => setup the singular name for the given resource. This is used as the instance variable name in
-    #                 controller, as the name in routes and the scope given to warden.
+    #  * :singular => setup the singular name for the given resource. This is used as the instance variable
+    #    name in controller, as the name in routes and the scope given to warden.
     #
     #      devise_for :users, :singular => :user
     #
     #  * :path_names => configure different path names to overwrite defaults :sign_in, :sign_out, :sign_up,
-    #                   :password, :confirmation, :unlock.
+    #    :password, :confirmation, :unlock.
     #
     #      devise_for :users, :path_names => { :sign_in => 'login', :sign_out => 'logout', :password => 'secret', :confirmation => 'verification' }
     #
@@ -68,6 +73,9 @@ module ActionDispatch::Routing
     #    However, if you want them to point to custom controller, you should do:
     #
     #      devise_for :users, :controllers => { :sessions => "users/sessions" }
+    #
+    #  * :failure_app => a rack app which is invoked whenever there is a failure. Strings representing a given
+    #    are also allowed as parameter.
     #
     #  * :sign_out_via => the HTTP method(s) accepted for the :sign_out action (default: :get),
     #    if you wish to restrict this to accept only :post or :delete requests you should do:
@@ -102,6 +110,14 @@ module ActionDispatch::Routing
     #  * :only => the opposite of :skip, tell which controllers only to generate routes to:
     #
     #      devise_for :users, :only => :sessions
+    #
+    #  * :skip_helpers => skip generating Devise url helpers like new_session_path(@user).
+    #    This is useful to avoid conflicts with previous routes and is false by default.
+    #    It accepts true as option, meaning it will skip all the helpers for the controllers
+    #    given in :skip but it also accepts specific helpers to be skipped:
+    #
+    #      devise_for :users, :skip => [:registrations, :confirmations], :skip_helpers => true
+    #      devise_for :users, :skip_helpers => [:registrations, :confirmations]
     #
     #  * :format => include "(.:format)" in the generated routes? true by default, set to false to disable:
     #
@@ -160,6 +176,7 @@ module ActionDispatch::Routing
     #     end
     #
     def devise_for(*resources)
+      @devise_finalized = false
       options = resources.extract_options!
 
       options[:as]          ||= @scope[:as]     if @scope[:as].present?
@@ -168,8 +185,7 @@ module ActionDispatch::Routing
       options[:path_names]    = (@scope[:path_names] || {}).merge(options[:path_names] || {})
       options[:constraints]   = (@scope[:constraints] || {}).merge(options[:constraints] || {})
       options[:defaults]      = (@scope[:defaults] || {}).merge(options[:defaults] || {})
-
-      @scope[:options]        = (@scope[:options] || {}).merge({:format => false}) if options[:format] == false
+      options[:options]       = (@scope[:options] || {}).merge({:format => false}) if options[:format] == false
 
       resources.map!(&:to_sym)
 
@@ -188,15 +204,11 @@ module ActionDispatch::Routing
           raise_no_devise_method_error!(mapping.class_name)
         end
 
-        routes  = mapping.routes
-        if options.has_key?(:only)
-          routes  = Array(options.delete(:only)).map { |s| s.to_s.singularize.to_sym } & mapping.routes
-        end
-        routes -= Array(options.delete(:skip)).map { |s| s.to_s.singularize.to_sym }
+        routes  = mapping.used_routes
 
         devise_scope mapping.name do
           yield if block_given?
-          with_devise_exclusive_scope mapping.fullpath, mapping.name, mapping.constraints, mapping.defaults do
+          with_devise_exclusive_scope mapping.fullpath, mapping.name, options do
             routes.each { |mod| send("devise_#{mod}", mapping, mapping.controllers) }
           end
         end
@@ -345,23 +357,26 @@ module ActionDispatch::Routing
         path_prefix = "/#{mapping.path}/auth".squeeze("/")
 
         if ::OmniAuth.config.path_prefix && ::OmniAuth.config.path_prefix != path_prefix
-          warn "[DEVISE] You can only add :omniauthable behavior to one model."
+          raise "You can only add :omniauthable behavior to one Devise model"
         else
           ::OmniAuth.config.path_prefix = path_prefix
         end
 
-        match "#{path_prefix}/:action/callback", :action => Regexp.union(mapping.to.omniauth_providers.map(&:to_s)),
+        match "#{path_prefix}/:action/callback", :constraints => { :action => Regexp.union(mapping.to.omniauth_providers.map(&:to_s)) },
           :to => controllers[:omniauth_callbacks], :as => :omniauth_callback
       ensure
         @scope[:path] = path
       end
 
-      def with_devise_exclusive_scope(new_path, new_as, new_constraints, new_defaults) #:nodoc:
-        old_as, old_path, old_module, old_constraints, old_defaults = @scope[:as], @scope[:path], @scope[:module], @scope[:constraints], @scope[:defaults]
-        @scope[:as], @scope[:path], @scope[:module], @scope[:constraints], @scope[:defaults] = new_as, new_path, nil, new_constraints, new_defaults
+      def with_devise_exclusive_scope(new_path, new_as, options) #:nodoc:
+        old_as, old_path, old_module, old_constraints, old_defaults, old_options = 
+          *@scope.values_at(:as, :path, :module, :constraints, :defaults, :options)
+        @scope[:as], @scope[:path], @scope[:module], @scope[:constraints], @scope[:defaults], @scope[:options] =
+          new_as, new_path, nil, *options.values_at(:constraints, :defaults, :options)
         yield
       ensure
-        @scope[:as], @scope[:path], @scope[:module], @scope[:constraints], @scope[:defaults] = old_as, old_path, old_module, old_constraints, old_defaults
+        @scope[:as], @scope[:path], @scope[:module], @scope[:constraints], @scope[:defaults], @scope[:options] = 
+          old_as, old_path, old_module, old_constraints, old_defaults, old_options
       end
 
       def raise_no_devise_method_error!(klass) #:nodoc:

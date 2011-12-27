@@ -6,7 +6,7 @@ class ConfirmationTest < ActionController::IntegrationTest
     visit user_confirmation_path(:confirmation_token => confirmation_token)
   end
 
-  test 'user should be able to request a new confirmation' do
+  def resend_confirmation
     user = create_user(:confirm => false)
     ActionMailer::Base.deliveries.clear
 
@@ -15,10 +15,23 @@ class ConfirmationTest < ActionController::IntegrationTest
 
     fill_in 'email', :with => user.email
     click_button 'Resend confirmation instructions'
+  end
+
+  test 'user should be able to request a new confirmation' do
+    resend_confirmation
 
     assert_current_url '/users/sign_in'
     assert_contain 'You will receive an email with instructions about how to confirm your account in a few minutes'
     assert_equal 1, ActionMailer::Base.deliveries.size
+    assert_equal ['please-change-me@config-initializers-devise.com'], ActionMailer::Base.deliveries.first.from
+  end
+
+  test 'user should receive a confirmation from a custom mailer' do
+    User.any_instance.stubs(:devise_mailer).returns(Users::Mailer)
+
+    resend_confirmation
+
+    assert_equal ['custom@example.com'], ActionMailer::Base.deliveries.first.from
   end
 
   test 'user with invalid confirmation token should not be able to confirm an account' do
@@ -85,7 +98,7 @@ class ConfirmationTest < ActionController::IntegrationTest
   end
 
   test 'not confirmed user with setup to block without confirmation should not be able to sign in' do
-    swap Devise, :confirm_within => 0.days do
+    swap Devise, :allow_unconfirmed_access_for => 0.days do
       sign_in_as_user(:confirm => false)
 
       assert_contain 'You have to confirm your account before continuing'
@@ -93,8 +106,19 @@ class ConfirmationTest < ActionController::IntegrationTest
     end
   end
 
+  test 'not confirmed user should not see confirmation message if invalid credentials are given' do
+    swap Devise, :allow_unconfirmed_access_for => 0.days do
+      sign_in_as_user(:confirm => false) do
+        fill_in 'password', :with => 'invalid'
+      end
+
+      assert_contain 'Invalid email or password'
+      assert_not warden.authenticated?(:user)
+    end
+  end
+
   test 'not confirmed user but configured with some days to confirm should be able to sign in' do
-    swap Devise, :confirm_within => 1.day do
+    swap Devise, :allow_unconfirmed_access_for => 1.day do
       sign_in_as_user(:confirm => false)
 
       assert_response :success
@@ -157,7 +181,7 @@ class ConfirmationTest < ActionController::IntegrationTest
       click_button 'Resend confirmation instructions'
 
       assert_contain "If your e-mail exists on our database, you will receive an email with instructions about how to confirm your account in a few minutes."
-      assert_current_url "/users/confirmation"
+      assert_current_url "/users/sign_in"
     end
   end
 
@@ -173,7 +197,59 @@ class ConfirmationTest < ActionController::IntegrationTest
       assert_not_contain "Email not found"
 
       assert_contain "If your e-mail exists on our database, you will receive an email with instructions about how to confirm your account in a few minutes."
-      assert_current_url "/users/confirmation"
+      assert_current_url "/users/sign_in"
     end
+  end
+end
+
+class ConfirmationOnChangeTest < ActionController::IntegrationTest
+  def create_second_admin(options={})
+    @admin = nil
+    create_admin(options)
+  end
+
+  def visit_admin_confirmation_with_token(confirmation_token)
+    visit admin_confirmation_path(:confirmation_token => confirmation_token)
+  end
+
+  test 'admin should be able to request a new confirmation after email changed' do
+    admin = create_admin
+    admin.update_attributes(:email => 'new_test@example.com')
+
+    visit new_admin_session_path
+    click_link "Didn't receive confirmation instructions?"
+
+    fill_in 'email', :with => admin.unconfirmed_email
+    assert_difference "ActionMailer::Base.deliveries.size" do
+      click_button 'Resend confirmation instructions'
+    end
+
+    assert_current_url '/admin_area/sign_in'
+    assert_contain 'You will receive an email with instructions about how to confirm your account in a few minutes'
+  end
+
+  test 'admin with valid confirmation token should be able to confirm email after email changed' do
+    admin = create_admin
+    admin.update_attributes(:email => 'new_test@example.com')
+    assert_equal 'new_test@example.com', admin.unconfirmed_email
+    visit_admin_confirmation_with_token(admin.confirmation_token)
+
+    assert_contain 'Your account was successfully confirmed.'
+    assert_current_url '/admin_area/home'
+    assert admin.reload.confirmed?
+    assert_not admin.reload.pending_reconfirmation?
+  end
+
+  test 'admin email should be unique also within unconfirmed_email' do
+    admin = create_admin
+    admin.update_attributes(:email => 'new_admin_test@example.com')
+    assert_equal 'new_admin_test@example.com', admin.unconfirmed_email
+
+    create_second_admin(:email => "new_admin_test@example.com")
+
+    visit_admin_confirmation_with_token(admin.confirmation_token)
+    assert_have_selector '#error_explanation'
+    assert_contain /Email.*already.*taken/
+    assert admin.reload.pending_reconfirmation?
   end
 end

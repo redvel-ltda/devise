@@ -15,7 +15,8 @@ module Devise
     delegate :flash, :to => :request
 
     def self.call(env)
-      action(:respond).call(env)
+      @respond ||= action(:respond)
+      @respond.call(env)
     end
 
     def self.default_url_options(*args)
@@ -65,10 +66,14 @@ module Devise
     end
 
     def redirect_url
-      if skip_format?
-        send(:"new_#{scope}_session_path")
+      opts  = {}
+      route = :"new_#{scope}_session_path"
+      opts[:format] = request_format unless skip_format?
+
+      if respond_to?(route)
+        send(route, opts)
       else
-        send(:"new_#{scope}_session_path", :format => request_format)
+        root_path(opts)
       end
     end
 

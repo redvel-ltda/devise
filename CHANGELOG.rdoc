@@ -1,10 +1,121 @@
+== 2.0.0.rc
+
+Notes: https://github.com/plataformatec/devise/wiki/How-To:-Upgrade-to-Devise-2.0
+
+* enhancements
+  * Add support for e-mail reconfirmation on change (by github.com/Mandaryn and github.com/heimidal)
+  * Redirect users to sign in page after unlock (by github.com/nashby)
+
+* deprecation
+  * Devise.apply_schema is deprecated
+  * Devise migration helpers are deprecated
+  * Usage of Devise.remember_across_browsers was deprecated
+  * Usage of Devise.confirm_within was deprecated in favor Devise.allow_unconfirmed_access_for
+  * Usage of rememberable with remember_token was removed
+  * Usage of recoverable without reset_password_sent_at was removed
+  * Usage of Devise.case_insensitive_keys equals to false was removed
+  * Usage of Devise.stateless_token= is deprecated in favor of appending :token_auth to Devise.skip_session_storage
+
+== 1.5.3
+
 * bug fix
+  * Ensure delegator converts scope to symbol (by github.com/dmitriy-kiriyenko)
+  * Ensure passing :format => false to devise_for is not permanent
+  * Ensure path checker does not check invalid routes
+
+== 1.5.2
+
+* enhancements
+  * Add support for Rails 3.1 new mass assignment conventions (by github.com/kirs)
+  * Add timeout_in method to Timeoutable, it can be overridden in a model (by github.com/lest)
+
+* bug fix
+  * OmniAuth error message now shows the proper option (:strategy_class instead of :klass)
+
+== 1.5.1
+
+* bug fix
+  * Devise should not attempt to load OmniAuth strategies. Strategies should be loaded before hand by the developer or explicitly given to Devise.
+
+== 1.5.0
+
+* enhancements
+  * Timeoutable also skips tracking if skip_trackable is given
+  * devise_for now accepts :failure_app as an option
+  * Models can select the proper mailer via devise_mailer method (by github.com/locomotivecms)
+  * Migration generator now uses the change method (by github.com/nashby)
+  * Support to markerb templates on the mailer generator (by github.com/sbounmy)
+  * Support for Omniauth 1.0 (older versions are no longer supported) (by github.com/TamiasSibiricus)
+
+* bug fix
+  * Allow idempotent API requests
+  * Fix bug where logs did not show 401 as status code
+  * Change paranoid settings to behave as success instead of as failure
+  * Fix bug where activation messages were shown first than the credentials error message
+  * Instance variables are expired after sign out
+
+* deprecation
+  * redirect_location is deprecated, please use after_sign_in_path_for
+  * after_sign_in_path_for now redirects to session[scope_return_to] if any value is stored in it
+
+== 1.4.9
+
+* bug fix
+  * url helpers were not being set under some circumstances
+
+== 1.4.8
+
+* enhancements
+  * Add docs for assets pipeline and Heroku
+
+* bug fix
+  * confirmation_url was not being set under some circumstances
+
+== 1.4.7
+
+* bug fix
+  * Fix backward incompatible change from 1.4.6 for those using custom controllers
+
+== 1.4.6
+
+* enhancements
+  * Allow devise_for :skip => :all
+  * Allow options to be passed to authenticate_user!
+  * Allow --skip-routes to devise generator
+  * Add allow_params_authentication! to make it explicit when params authentication is allowed in a controller
+
+== 1.4.5
+
+* bug fix
+  * Failure app tries the root path if a session one does not exist
+  * No need to finalize Devise helpers all the time (by github.com/bradleypriest)
+  * Reset password shows proper message if user is not active
+  * `clean_up_passwords` sets the accessors to nil to skip validations
+
+== 1.4.4
+
+* bug fix
+  * Do not always skip helpers, instead provide :skip_helpers as option to trigger it manually
+
+== 1.4.3
+
+* enhancements
+  * Improve Rails 3.1 compatibility
+  * Use serialize_into_session and serialize_from_session in Warden serialize to improve extensibility
+
+* bug fix
+  * Generator properly generates a change_table migration if a model already exists
   * Properly deprecate setup_mail
+  * Fix encoding issues with email regexp
+  * Only generate helpers for the used mappings
+  * Wrap :action constraints in the proper hash
+
+* deprecations
+  * Loosened the used email regexp to simply assert the existent of "@". If someone relies on a more strict regexp, they may use https://github.com/SixArm/sixarm_ruby_email_address_validation
 
 == 1.4.2
 
 * bug fix
-  * Improve Rails 3.1 compatibility
   * Provide a more robust behavior to serializers and add :force_except option
 
 == 1.4.1

@@ -91,24 +91,37 @@ MESSAGE
       # Example:
       #   before_filter :require_no_authentication, :only => :new
       def require_no_authentication
+        return unless is_navigational_format?
         no_input = devise_mapping.no_input_strategies
-        args = no_input.dup.push :scope => resource_name
-        if no_input.present? && warden.authenticate?(*args)
+
+        authenticated = if no_input.present?
+          args = no_input.dup.push :scope => resource_name
+          warden.authenticate?(*args)
+        else
+          warden.authenticated?(resource_name)
+        end
+
+        if authenticated
           resource = warden.user(resource_name)
           flash[:alert] = I18n.t("devise.failure.already_authenticated")
           redirect_to after_sign_in_path_for(resource)
         end
       end
 
-      # Helper for use to validate if an resource is errorless. If we are on paranoid mode, we always should assume it is
-      # and return false.
-      def successful_and_sane?(resource)
-        if Devise.paranoid
-          set_flash_message :notice, :send_paranoid_instructions if is_navigational_format?
+      # Helper for use after calling send_*_instructions methods on a resource.
+      # If we are in paranoid mode, we always act as if the resource was valid
+      # and instructions were sent.
+      def successfully_sent?(resource)
+        notice = if Devise.paranoid
           resource.errors.clear
-          false
-        else
-          resource.errors.empty?
+          :send_paranoid_instructions
+        elsif resource.errors.empty?
+          :send_instructions
+        end
+
+        if notice
+          set_flash_message :notice, notice if is_navigational_format?
+          true
         end
       end
 

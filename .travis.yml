@@ -5,4 +5,9 @@ rvm:
   - ree
   - rbx
   - rbx-2.0
-  - jruby
+notifications:
+  recipients:
+    - jose.valim@plataformatec.com.br
+    - carlos@plataformatec.com.br
+    - rodrigo.flores@plataformatec.com.br
+    - rafael.franca@plataformatec.com.br

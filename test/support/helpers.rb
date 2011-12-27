@@ -51,10 +51,37 @@ class ActiveSupport::TestCase
       old_values[key] = object.send key
       object.send :"#{key}=", value
     end
+    clear_cached_variables(new_values)
     yield
   ensure
+    clear_cached_variables(new_values)
     old_values.each do |key, value|
       object.send :"#{key}=", value
+    end
+  end
+
+  def clear_cached_variables(options)
+    if options.key?(:case_insensitive_keys) || options.key?(:strip_whitespace_keys)
+      Devise.mappings.each do |_, mapping|
+        mapping.to.instance_variable_set(:@devise_param_filter, nil)
+      end
+    end
+  end
+
+  def with_rails_version(constants)
+    saved_constants = {}
+
+    constants.each do |constant, val|
+      saved_constants[constant] = ::Rails::VERSION.const_get constant
+      Kernel::silence_warnings { ::Rails::VERSION.const_set(constant, val) }
+    end
+
+    begin
+      yield
+    ensure
+      constants.each do |constant, val|
+        Kernel::silence_warnings { ::Rails::VERSION.const_set(constant, saved_constants[constant]) }
+      end
     end
   end
 end
