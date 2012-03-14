@@ -12,9 +12,7 @@ Rails.application.routes.draw do
   resources :admins, :only => [:index]
 
   # Users scope
-  devise_for :users, :controllers => { :omniauth_callbacks => "users/omniauth_callbacks" } do
-    match "/devise_for/sign_in", :to => "devise/sessions#new"
-  end
+  devise_for :users, :controllers => { :omniauth_callbacks => "users/omniauth_callbacks" }
 
   as :user do
     match "/as/sign_in", :to => "devise/sessions#new"
@@ -60,18 +58,22 @@ Rails.application.routes.draw do
   # Other routes for routing_test.rb
   devise_for :reader, :class_name => "User", :only => :passwords
 
+  scope :host => "sub.example.com" do
+    devise_for :sub_admin, :class_name => "Admin"
+  end
+
   namespace :publisher, :path_names => { :sign_in => "i_dont_care", :sign_out => "get_out" } do
     devise_for :accounts, :class_name => "Admin", :path_names => { :sign_in => "get_in" }
   end
 
-  scope ":locale" do
+  scope ":locale", :module => :invalid do
     devise_for :accounts, :singular => "manager", :class_name => "Admin",
       :path_names => {
         :sign_in => "login", :sign_out => "logout",
         :password => "secret", :confirmation => "verification",
         :unlock => "unblock", :sign_up => "register",
         :registration => "management", :cancel => "giveup"
-      }, :failure_app => lambda { |env| [404, {"Content-Type" => "text/plain"}, ["Oops, not found"]] }
+      }, :failure_app => lambda { |env| [404, {"Content-Type" => "text/plain"}, ["Oops, not found"]] }, :module => :devise
   end
 
   namespace :sign_out_via, :module => "devise" do

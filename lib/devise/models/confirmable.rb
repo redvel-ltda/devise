@@ -31,9 +31,18 @@ module Devise
 
       included do
         before_create :generate_confirmation_token, :if => :confirmation_required?
-        after_create  :send_confirmation_instructions, :if => :confirmation_required?
+        after_create  :send_on_create_confirmation_instructions, :if => :confirmation_required?
         before_update :postpone_email_change_until_confirmation, :if => :postpone_email_change?
         after_update :send_confirmation_instructions, :if => :reconfirmation_required?
+      end
+
+      def self.required_fields(klass)
+        required_methods = [:confirmation_token, :confirmed_at, :confirmation_sent_at]
+        if klass.reconfirmable
+          required_methods << :unconfirmed_email
+        end
+
+        required_methods
       end
 
       # Confirm a user by setting it's confirmed_at to actual time. If the user
@@ -45,7 +54,7 @@ module Devise
           self.confirmed_at = Time.now.utc
 
           if self.class.reconfirmable && unconfirmed_email.present?
-            @bypass_postpone = true
+            skip_reconfirmation!
             self.email = unconfirmed_email
             self.unconfirmed_email = nil
 
@@ -68,7 +77,9 @@ module Devise
 
       # Send confirmation instructions by email
       def send_confirmation_instructions
+        self.confirmation_token = nil if reconfirmation_required?
         @reconfirmation_required = false
+
         generate_confirmation_token! if self.confirmation_token.blank?
         self.devise_mailer.confirmation_instructions(self).deliver
       end
@@ -97,6 +108,12 @@ module Devise
         self.confirmed_at = Time.now.utc
       end
 
+      # If you don't want reconfirmation to be sent, neither a code
+      # to be generated, call skip_reconfirmation!
+      def skip_reconfirmation!
+        @bypass_postpone = true
+      end
+
       def headers_for(action)
         headers = super
         if action == :confirmation_instructions && pending_reconfirmation?
@@ -106,6 +123,13 @@ module Devise
       end
 
       protected
+
+        # A callback method used to deliver confirmation
+        # instructions on creation. This can be overriden
+        # in models to map to a nice sign up e-mail.
+        def send_on_create_confirmation_instructions
+          self.devise_mailer.confirmation_instructions(self).deliver
+        end
 
         # Callback to overwrite if confirmation is required or not.
         def confirmation_required?

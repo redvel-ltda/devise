@@ -252,6 +252,24 @@ class ReconfirmableTest < ActiveSupport::TestCase
     assert_not_nil admin.confirmation_token
   end
 
+  test 'should not generate confirmation token if skipping reconfirmation after changing email' do
+    admin = create_admin
+    assert admin.confirm!
+    admin.skip_reconfirmation!
+    assert admin.update_attributes(:email => 'new_test@example.com')
+    assert_nil admin.confirmation_token
+  end
+
+
+  test 'should regenerate confirmation token after changing email' do
+    admin = create_admin
+    assert admin.confirm!
+    assert admin.update_attributes(:email => 'old_test@example.com')
+    token = admin.confirmation_token
+    assert admin.update_attributes(:email => 'new_test@example.com')
+    assert_not_equal token, admin.confirmation_token
+  end
+
   test 'should send confirmation instructions by email after changing email' do
     admin = create_admin
     assert admin.confirm!
@@ -318,5 +336,22 @@ class ReconfirmableTest < ActiveSupport::TestCase
     assert admin.save
     admin = Admin.find_by_unconfirmed_email_with_errors(:email => "new_test@email.com")
     assert admin.persisted?
+  end
+
+  test 'required_fields should contain the fields that Devise uses' do
+    assert_same_content Devise::Models::Confirmable.required_fields(User), [
+      :confirmation_sent_at,
+      :confirmation_token,
+      :confirmed_at
+    ]
+  end
+
+  test 'required_fields should also contain unconfirmable when reconfirmable_email is true' do
+    assert_same_content Devise::Models::Confirmable.required_fields(Admin), [
+      :confirmation_sent_at,
+      :confirmation_token,
+      :confirmed_at,
+      :unconfirmed_email
+    ]
   end
 end

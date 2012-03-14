@@ -23,14 +23,20 @@ module Devise
         result = resource && resource.valid_for_authentication?(&block)
 
         case result
-        when String, Symbol
+        when Symbol, String
+          ActiveSupport::Deprecation.warn "valid_for_authentication should return a boolean value"
           fail!(result)
-          false
-        when TrueClass
+          return false
+        end
+
+        if result
           decorate(resource)
           true
         else
-          result
+          if resource
+            fail!(resource.unauthenticated_message)
+          end
+          false
         end
       end
 
@@ -105,7 +111,7 @@ module Devise
       # Helper to decode credentials from HTTP.
       def decode_credentials
         return [] unless request.authorization && request.authorization =~ /^Basic (.*)/m
-        ActiveSupport::Base64.decode64($1).split(/:/, 2)
+        Base64.decode64($1).split(/:/, 2)
       end
 
       # Sets the authentication hash and the password from params_auth_hash or http_auth_hash.

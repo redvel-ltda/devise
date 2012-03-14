@@ -23,6 +23,19 @@ class LockableTest < ActiveSupport::TestCase
     assert_equal 0, user.reload.failed_attempts
   end
 
+  test "should increment failed_attempts on successfull validation if the user is already locked" do
+    user = create_user
+    user.confirm!
+
+    swap Devise, :maximum_attempts => 2 do
+      3.times { user.valid_for_authentication?{ false } }
+      assert user.reload.access_locked?
+    end
+
+    user.valid_for_authentication?{ true }
+    assert_equal 4, user.reload.failed_attempts
+  end
+
   test "should not touch failed_attempts if lock_strategy is none" do
     user = create_user
     user.confirm!
@@ -220,6 +233,40 @@ class LockableTest < ActiveSupport::TestCase
       user.valid_for_authentication? { true }
       assert_equal 0, user.failed_attempts
       assert_nil user.locked_at
+    end
+  end
+
+  test 'required_fields should contain the all the fields when all the strategies are enabled' do
+    swap Devise, :unlock_strategy => :both do
+      swap Devise, :lock_strategy => :failed_attempts do
+        assert_same_content Devise::Models::Lockable.required_fields(User), [
+         :failed_attempts,
+         :unlock_at,
+         :unlock_token
+        ]
+      end
+    end
+  end
+
+  test 'required_fields should contain only failed_attempts and unlock_at when the strategies are time and failed_attempts are enabled' do
+    swap Devise, :unlock_strategy => :time do
+      swap Devise, :lock_strategy => :failed_attempts do
+        assert_same_content Devise::Models::Lockable.required_fields(User), [
+         :failed_attempts,
+         :unlock_at
+        ]
+      end
+    end
+  end
+
+  test 'required_fields should contain only failed_attempts and unlock_token when the strategies are token and failed_attempts are enabled' do
+    swap Devise, :unlock_strategy => :email do
+      swap Devise, :lock_strategy => :failed_attempts do
+        assert_same_content Devise::Models::Lockable.required_fields(User), [
+         :failed_attempts,
+         :unlock_token
+        ]
+      end
     end
   end
 end

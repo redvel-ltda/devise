@@ -407,7 +407,10 @@ class AuthenticationOthersTest < ActionController::IntegrationTest
 
   test 'sign in stub in xml format' do
     get new_user_session_path(:format => 'xml')
-    assert_equal "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<user>\n  <email></email>\n  <password nil=\"true\"></password>\n</user>\n", response.body
+    assert_match '<?xml version="1.0" encoding="UTF-8"?>', response.body
+    assert_match /<user>.*<\/user>/m, response.body
+    assert_match '<email></email>', response.body
+    assert_match '<password nil="true"></password>', response.body
   end
 
   test 'sign in stub in json format' do
@@ -428,12 +431,6 @@ class AuthenticationOthersTest < ActionController::IntegrationTest
 
   test 'uses the mapping from router' do
     sign_in_as_user :visit => "/as/sign_in"
-    assert warden.authenticated?(:user)
-    assert_not warden.authenticated?(:admin)
-  end
-
-  test 'uses the mapping from nested devise_for call' do
-    sign_in_as_user :visit => "/devise_for/sign_in"
     assert warden.authenticated?(:user)
     assert_not warden.authenticated?(:admin)
   end

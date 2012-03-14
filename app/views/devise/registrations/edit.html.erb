@@ -7,7 +7,7 @@
   <%= f.email_field :email %></p>
 
   <p><%= f.label :password, t('devise.attributes.password') %> <i>(<%= t 'devise.views.registrations.edit.leave_blank' %>)</i><br />
-  <%= f.password_field :password %></p>
+  <%= f.password_field :password, :autocomplete => "off" %></p>
 
   <p><%= f.label :password_confirmation, t('devise.attributes.password_confirmation') %><br />
   <%= f.password_field :password_confirmation %></p>

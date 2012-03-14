@@ -1,5 +1,15 @@
 module Devise
   module Models
+    class MissingAttribute < StandardError
+      def initialize(attributes)
+        @attributes = attributes
+      end
+
+      def message
+        "The following attribute(s) is (are) missing on your model: #{@attributes.join(", ")}"
+      end
+    end
+
     # Creates configuration values for Devise and for the given module.
     #
     #   Devise::Models.config(Devise::Authenticatable, :stretches, 10)
@@ -39,6 +49,26 @@ module Devise
       end
     end
 
+    def self.check_fields!(klass)
+      failed_attributes = []
+
+      klass.devise_modules.each do |mod|
+        instance = klass.new
+
+        if const_get(mod.to_s.classify).respond_to?(:required_fields)
+          const_get(mod.to_s.classify).required_fields(klass).each do |field|
+            failed_attributes << field unless instance.respond_to?(field)
+          end
+        else
+          ActiveSupport::Deprecation.warn "The module #{mod} doesn't implement self.required_fields(klass). Devise uses required_fields to warn developers of any missing fields in their models. Please implement #{mod}.required_fields(klass) that returns an array of symbols with the required fields."
+        end
+      end
+
+      if failed_attributes.any?
+        fail Devise::Models::MissingAttribute.new(failed_attributes)
+      end
+    end
+
     # Include the chosen devise modules in your model:
     #
     #   devise :database_authenticatable, :confirmable, :recoverable
@@ -66,7 +96,7 @@ module Devise
             if class_mod.respond_to?(:available_configs)
               available_configs = class_mod.available_configs
               available_configs.each do |config|
-                next unless options.key?(config)                
+                next unless options.key?(config)
                 send(:"#{config}=", options.delete(config))
               end
             end

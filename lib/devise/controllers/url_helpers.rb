@@ -16,7 +16,15 @@ module Devise
     #   new_confirmation_path(:user) => new_user_confirmation_path
     #   confirmation_path(:user)     => user_confirmation_path
     #
-    # Those helpers are added to your ApplicationController.
+    # Those helpers are included by default to ActionController::Base.
+    #
+    # In case you want to add such helpers to another class, you can do
+    # that as long as this new class includes both url_helpers and
+    # mounted_helpers. Example:
+    #
+    #     include Rails.application.routes.url_helpers
+    #     include Rails.application.routes.mounted_helpers
+    #
     module UrlHelpers
       def self.remove_helpers!
         self.instance_methods.map(&:to_s).grep(/_(url|path)$/).each do |method|
@@ -39,7 +47,7 @@ module Devise
               class_eval <<-URL_HELPERS, __FILE__, __LINE__ + 1
                 def #{method}(resource_or_scope, *args)
                   scope = Devise::Mapping.find_scope!(resource_or_scope)
-                  send("#{action}\#{scope}_#{module_name}_#{path_or_url}", *args)
+                  _devise_route_context.send("#{action}\#{scope}_#{module_name}_#{path_or_url}", *args)
                 end
               URL_HELPERS
             end
@@ -48,6 +56,12 @@ module Devise
       end
 
       generate_helpers!(Devise::URL_HELPERS)
+
+      private
+
+      def _devise_route_context
+        @_devise_route_context ||= send(Devise.available_router_name)
+      end
     end
   end
 end

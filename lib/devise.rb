@@ -10,22 +10,20 @@ module Devise
   autoload :FailureApp,  'devise/failure_app'
   autoload :OmniAuth,    'devise/omniauth'
   autoload :ParamFilter, 'devise/param_filter'
-  autoload :PathChecker, 'devise/path_checker'
   autoload :Schema,      'devise/schema'
   autoload :TestHelpers, 'devise/test_helpers'
 
   module Controllers
     autoload :Helpers, 'devise/controllers/helpers'
-    autoload :InternalHelpers, 'devise/controllers/internal_helpers'
     autoload :Rememberable, 'devise/controllers/rememberable'
     autoload :ScopedViews, 'devise/controllers/scoped_views'
-    autoload :SharedHelpers, 'devise/controllers/shared_helpers'
     autoload :UrlHelpers, 'devise/controllers/url_helpers'
   end
 
   module Encryptors
     autoload :Base, 'devise/encryptors/base'
     autoload :AuthlogicSha512, 'devise/encryptors/authlogic_sha512'
+    autoload :BCrypt, 'devise/encryptors/bcrypt'
     autoload :ClearanceSha1, 'devise/encryptors/clearance_sha1'
     autoload :RestfulAuthenticationSha1, 'devise/encryptors/restful_authentication_sha1'
     autoload :Sha512, 'devise/encryptors/sha512'
@@ -65,8 +63,8 @@ module Devise
   }
 
   # Custom domain for cookies. Not set by default
-  mattr_accessor :cookie_options
-  @@cookie_options = {}
+  mattr_accessor :rememberable_options
+  @@rememberable_options = {}
 
   # The number of times to encrypt password.
   mattr_accessor :stretches
@@ -202,9 +200,8 @@ module Devise
   @@skip_session_storage = []
 
   # Which formats should be treated as navigational.
-  # We need both :"*/*" and "*/*" to work on different Rails versions.
   mattr_accessor :navigational_formats
-  @@navigational_formats = [:"*/*", "*/*", :html]
+  @@navigational_formats = ["*/*", :html]
 
   # When set to true, signing out a user signs out all other scopes.
   mattr_accessor :sign_out_all_scopes
@@ -213,6 +210,18 @@ module Devise
   # The default method used while signing out
   mattr_accessor :sign_out_via
   @@sign_out_via = :get
+
+  # The parent controller all Devise controllers inherits from.
+  # Defaults to ApplicationController. This should be set early
+  # in the initialization process and should be set to a string.
+  mattr_accessor :parent_controller
+  @@parent_controller = "ApplicationController"
+
+  # The router Devise should use to generate routes. Defaults
+  # to :main_app. Should be overriden by engines in order
+  # to provide custom routes.
+  mattr_accessor :router_name
+  @@router_name = nil
 
   # DEPRECATED CONFIG
 
@@ -233,6 +242,11 @@ module Devise
   def self.confirm_within=(value)
     warn "\n[DEVISE] Devise.confirm_within= is deprecated. Please set Devise.allow_unconfirmed_access_for= instead.\n"
     Devise.allow_unconfirmed_access_for = value
+  end
+
+  def self.cookie_options=(value)
+    warn "\n[DEVISE] Devise.cookie_options= is deprecated. Please set Devise.rememberable_options= instead.\n"
+    Devise.rememberable_options = value
   end
 
   def self.stateless_token=(value)
@@ -290,6 +304,10 @@ module Devise
     end
   end
 
+  def self.available_router_name
+    router_name || :main_app
+  end
+
   def self.omniauth_providers
     omniauth_configs.keys
   end
@@ -334,7 +352,7 @@ module Devise
   #
   def self.add_module(module_name, options = {})
     ALL << module_name
-    options.assert_valid_keys(:strategy, :model, :controller, :route)
+    options.assert_valid_keys(:strategy, :model, :controller, :route, :no_input)
 
     if strategy = options[:strategy]
       strategy = (strategy == true ? module_name : strategy)
@@ -346,7 +364,7 @@ module Devise
       CONTROLLERS[module_name] = controller
     end
 
-    NO_INPUT << strategy if strategy && controller != :sessions
+    NO_INPUT << strategy if options[:no_input]
 
     if route = options[:route]
       case route
@@ -411,11 +429,6 @@ module Devise
     ActiveSupport.on_load(:action_view) do
       include scope::UrlHelpers
     end
-  end
-
-  # Returns true if Rails version is bigger than 3.0.x
-  def self.rack_session?
-    Rails::VERSION::STRING[0,3] != "3.0"
   end
 
   # Regenerates url helpers considering Devise.mapping

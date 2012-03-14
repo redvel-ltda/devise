@@ -9,8 +9,9 @@ module Devise
     include ActionController::RackDelegation
     include ActionController::UrlFor
     include ActionController::Redirecting
+
     include Rails.application.routes.url_helpers
-    include Devise::Controllers::SharedHelpers
+    include Rails.application.routes.mounted_helpers
 
     delegate :flash, :to => :request
 
@@ -20,7 +21,11 @@ module Devise
     end
 
     def self.default_url_options(*args)
-      ApplicationController.default_url_options(*args)
+      if defined?(ApplicationController)
+        ApplicationController.default_url_options(*args)
+      else
+        {}
+      end
     end
 
     def respond
@@ -48,32 +53,50 @@ module Devise
 
     def redirect
       store_location!
-      flash[:alert] = i18n_message
+      if flash[:timedout] && flash[:alert]
+        flash.keep(:timedout)
+        flash.keep(:alert)
+      else
+        flash[:alert] = i18n_message
+      end
       redirect_to redirect_url
     end
 
   protected
 
     def i18n_message(default = nil)
-      message = warden.message || warden_options[:message] || default || :unauthenticated
+      message = warden_message || default || :unauthenticated
 
       if message.is_a?(Symbol)
         I18n.t(:"#{scope}.#{message}", :resource_name => scope,
-               :scope => "devise.failure", :default => [message, message.to_s])
+               :scope => "devise.failure", :default => [message])
       else
         message.to_s
       end
     end
 
     def redirect_url
+      if warden_message == :timeout
+        flash[:timedout] = true
+        attempted_path || scope_path
+      else
+        scope_path
+      end
+    end
+
+    def scope_path
       opts  = {}
       route = :"new_#{scope}_session_path"
       opts[:format] = request_format unless skip_format?
 
-      if respond_to?(route)
-        send(route, opts)
-      else
+      context = send(Devise.available_router_name)
+
+      if context.respond_to?(route)
+        context.send(route, opts)
+      elsif respond_to?(:root_path)
         root_path(opts)
+      else
+        "/"
       end
     end
 
@@ -130,6 +153,10 @@ module Devise
       env['warden.options']
     end
 
+    def warden_message
+      @message ||= warden.message || warden_options[:message]
+    end
+
     def scope
       @scope ||= warden_options[:scope] || Devise.default_scope
     end
@@ -144,6 +171,14 @@ module Devise
     # would never use the same uri to redirect.
     def store_location!
       session["#{scope}_return_to"] = attempted_path if request.get? && !http_auth?
+    end
+
+    def is_navigational_format?
+      Devise.navigational_formats.include?(request_format)
+    end
+
+    def request_format
+      @request_format ||= request.format.try(:ref)
     end
   end
 end

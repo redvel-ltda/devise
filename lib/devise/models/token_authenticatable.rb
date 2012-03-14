@@ -27,6 +27,10 @@ module Devise
     module TokenAuthenticatable
       extend ActiveSupport::Concern
 
+      def self.required_fields(klass)
+        [:authentication_token]
+      end
+
       # Generate new authentication token (a.k.a. "single access token").
       def reset_authentication_token
         self.authentication_token = self.class.authentication_token
@@ -51,6 +55,7 @@ module Devise
       # Hook called after token authentication.
       def after_token_authentication
       end
+
 
       module ClassMethods
         def find_for_token_authentication(conditions)

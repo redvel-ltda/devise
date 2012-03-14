@@ -1,5 +1,4 @@
 require 'devise/hooks/activatable'
-require 'devise/models/serializable'
 
 module Devise
   module Models
@@ -52,7 +51,10 @@ module Devise
     module Authenticatable
       extend ActiveSupport::Concern
 
-      include Devise::Models::Serializable
+      BLACKLIST_FOR_SERIALIZATION = [:encrypted_password, :reset_password_token, :reset_password_sent_at,
+        :remember_created_at, :sign_in_count, :current_sign_in_at, :last_sign_in_at, :current_sign_in_ip,
+        :last_sign_in_ip, :password_salt, :confirmation_token, :confirmed_at, :confirmation_sent_at,
+        :unconfirmed_email, :failed_attempts, :unlock_token, :locked_at, :authentication_token]
 
       included do
         class_attribute :devise_modules, :instance_writer => false
@@ -60,6 +62,10 @@ module Devise
 
         before_validation :downcase_keys
         before_validation :strip_whitespace
+      end
+
+      def self.required_fields(klass)
+        []
       end
 
       # Check if the current object is valid for authentication. This method and
@@ -70,6 +76,10 @@ module Devise
       # and inactive_message instead.
       def valid_for_authentication?
         block_given? ? yield : true
+      end
+
+      def unauthenticated_message
+        :invalid
       end
 
       def active_for_authentication?
@@ -97,6 +107,31 @@ module Devise
 
       def strip_whitespace
         (self.class.strip_whitespace_keys || []).each { |k| self[k].try(:strip!) }
+      end
+
+      array = %w(serializable_hash)
+      # to_xml does not call serializable_hash on 3.1
+      array << "to_xml" if Rails::VERSION::STRING[0,3] == "3.1"
+
+      array.each do |method|
+        class_eval <<-RUBY, __FILE__, __LINE__
+          # Redefine to_xml and serializable_hash in models for more secure defaults.
+          # By default, it removes from the serializable model all attributes that
+          # are *not* accessible. You can remove this default by using :force_except
+          # and passing a new list of attributes you want to exempt. All attributes
+          # given to :except will simply add names to exempt to Devise internal list.
+          def #{method}(options=nil)
+            options ||= {}
+            options[:except] = Array(options[:except])
+
+            if options[:force_except]
+              options[:except].concat Array(options[:force_except])
+            else
+              options[:except].concat BLACKLIST_FOR_SERIALIZATION
+            end
+            super(options)
+          end
+        RUBY
       end
 
       module ClassMethods

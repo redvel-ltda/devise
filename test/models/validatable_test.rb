@@ -105,9 +105,13 @@ class ValidatableTest < ActiveSupport::TestCase
     assert_equal 'is too long (maximum is 128 characters)', user.errors[:password].join
   end
 
-  test 'shuold not be included in objects with invalid API' do
+  test 'should not be included in objects with invalid API' do
     assert_raise RuntimeError do
       Class.new.send :include, Devise::Models::Validatable
     end
+  end
+
+  test 'required_fields should be an empty array' do
+    assert_equal Devise::Models::Validatable.required_fields(User), []
   end
 end

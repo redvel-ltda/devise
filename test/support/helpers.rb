@@ -68,20 +68,24 @@ class ActiveSupport::TestCase
     end
   end
 
-  def with_rails_version(constants)
-    saved_constants = {}
-
-    constants.each do |constant, val|
-      saved_constants[constant] = ::Rails::VERSION.const_get constant
-      Kernel::silence_warnings { ::Rails::VERSION.const_set(constant, val) }
-    end
+  def swap_module_method_existence(klass, method)
+    klass.module_eval %Q[
+      class << self
+        alias #{method}_referenced #{method}
+        undef #{method}
+      end
+    ]
 
     begin
-      yield
+      yield if block_given?
     ensure
-      constants.each do |constant, val|
-        Kernel::silence_warnings { ::Rails::VERSION.const_set(constant, saved_constants[constant]) }
-      end
+
+      klass.module_eval %Q[
+        class << self
+          alias #{method} #{method}_referenced
+          undef #{method}_referenced
+        end
+      ]
     end
   end
 end
