@@ -1,16 +1,16 @@
-<h2>Sign up</h2>
+<h2><%= t 'devise.views.registrations.new.title' %></h2>
 
 <%= simple_form_for(resource, :as => resource_name, :url => registration_path(resource_name)) do |f| %>
   <%= f.error_notification %>
 
   <div class="inputs">
-    <%= f.input :email, :required => true, :autofocus => true %>
-    <%= f.input :password, :required => true %>
-    <%= f.input :password_confirmation, :required => true %>
+    <%= f.input :email, :label => t('devise.attributes.email'), :required => true, :autofocus => true %>
+    <%= f.input :password, :label => t('devise.attributes.password'), :required => true %>
+    <%= f.input :password_confirmation, :label => t('devise.attributes.password_confirmation'), :required => true %>
   </div>
 
   <div class="actions">
-    <%= f.button :submit, "Sign up" %>
+    <%= f.button :submit, t('devise.views.registrations.new.submit') %>
   </div>
 <% end %>
 
