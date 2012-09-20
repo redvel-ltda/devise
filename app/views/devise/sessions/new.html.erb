@@ -2,7 +2,7 @@
 
 <%= form_for(resource, :as => resource_name, :url => session_path(resource_name)) do |f| %>
   <p><%= f.label :email, t('devise.attributes.email') %><br />
-  <%= f.email_field :email %></p>
+  <%= f.email_field :email, :autofocus => true %></p>
 
   <p><%= f.label :password, t('devise.attributes.password') %><br />
   <%= f.password_field :password %></p>
@@ -14,4 +14,4 @@
   <p><%= f.submit t('devise.views.sessions.new.submit') %></p>
 <% end %>
 
-<%= render :partial => "devise/shared/links" %>
+<%= render "devise/shared/links" %>

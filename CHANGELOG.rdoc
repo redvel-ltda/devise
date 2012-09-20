@@ -1,15 +1,64 @@
-== 2.1.0.dev
+* enhancement
+  * Default minimum password length is now 8 (by @carlosgaldino).
+  * Confirmable now has a confirm_within option to set a period while the confirmation token is still valid (by @promisedlandt)
+
+* bug fix
+  * Fix a regression introduced on warden 1.2.1 (by @ejfinneran)
+  * Properly camelize omniauth strategies (by @saizai)
+  * Do not set flash messages for non navigational requests on session sign out (by @mathieul)
+  * Set the proper fields as required on the lockable module (by @nickhoffman)
+  * Respects Devise mailer default's reply_to (by @mrchrisadams)
+
+== 2.1.2
 
 * enhancements
-  * Add check_fields! method on Devise::Models to check if the model includes the fields that Devise uses
+  * Handle backwards incompatibility between Rails 3.2.6 and Thor 0.15.x
+
+* bug fix
+  * Fix regression on strategy validation on previous release
+
+== 2.1.1 (yanked)
+
+* enhancements
+  * `sign_out_all_scopes` now locks warden and does not allow new logins in the same action
+  * `Devise.omniauth_path_prefix` is available to configure omniauth path prefix
+  * Redirect to sign in page when trying to access password#edit without a token (by @gbataille)
+  * Allow a lambda in authenticate(d) routes helpers to further select the scope
+  * Removed warnings on Rails 3.2.6 (by @nashby)
+
+* bug fix
+  * `update_with_password` now relies on assign_attributes and forwards the :as option (by @wtn)
+  * Do not trigger timeout on sign in related actions
+  * Timeout does not explode when reset_authentication_token! is accidentally defined by Active Model (by @remomueller)
+
+* deprecations
+  * Strategy#validate() no longer validates nil resources
+
+== 2.1.0
+
+* enhancements
+  * Add `check_fields!(model_class)` method on Devise::Models to check if the model includes the fields that Devise uses
   * Add `skip_reconfirmation!` to skip reconfirmation
+  * Devise model generator now works with engines
+  * Devise encryptable was moved to its new gem (http://github.com/plataformatec/devise-encryptable)
+
+* deprecations
+  * Deprecations warnings added on Devise 2.0 are now removed with their features
+  * All devise modules should now have a `required_fields(klass)` module method to help gathering missing attributes
+  * `use_salt_as_remember_token` and `apply_schema` does not have any effect since 2.0 and are now deprecated
+  * `valid_for_authentication?` must now return a boolean
 
 * bug fix
   * Ensure after sign in hook is not called without a resource
   * Fix a term: now on Omniauth related flash messages, we say that we're authenticating from an omniauth provider instead of authorizing
-
-* deprecation
-  * All devise modules should have a required_fields(klass) module method to help gathering missing attributes
+  * Fixed redirect when authenticated mounted apps (by @hakanensari)
+  * Ensure the failure app still respects config.relative_url_root
+  * `/users/sign_in` doesn't choke on protected attributes used to select sign in scope (by @Paymium)
+  * `failed_attempts` is set to zero after any sign in (including via reset password) (by @rodrigoflores)
+  * Added token expiration on timeout (by @antiarchitect)
+  * Do not accidentally mark `_prefixes` as private
+  * Better support for custom strategies on test helpers (by @mattconnolly)
+  * Return `head :no_content` in SessionsController now that most JS libraries handle it (by @julianvargasalvarez)
 
 == 2.0.4
 
@@ -72,6 +121,7 @@ Notes: https://github.com/plataformatec/devise/wiki/How-To:-Upgrade-to-Devise-2.
   * Move devise/shared/_links.erb to devise/_links.erb
   * Deprecated support of nested devise_for blocks
   * Deprecated support to devise.registrations.reasons and devise.registrations.inactive_signed_up in favor of devise.registrations.signed_up_but_*
+  * Protected method render_with_scope was removed.
 
 == 1.5.3
 

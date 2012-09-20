@@ -88,8 +88,8 @@ module Devise
       # Return true if the given scope is signed in session. If no scope given, return
       # true if any scope is signed in. Does not run authentication hooks.
       def signed_in?(scope=nil)
-        [ scope || Devise.mappings.keys ].flatten.any? do |scope|
-          warden.authenticate?(:scope => scope)
+        [ scope || Devise.mappings.keys ].flatten.any? do |_scope|
+          warden.authenticate?(:scope => _scope)
         end
       end
 
@@ -126,8 +126,8 @@ module Devise
       end
 
       # Sign out a given user or scope. This helper is useful for signing out a user
-      # after deleting accounts. Returns true if there was a logout and false if there is no user logged in
-      # on the referred scope
+      # after deleting accounts. Returns true if there was a logout and false if there
+      # is no user logged in on the referred scope
       #
       # Examples:
       #
@@ -141,6 +141,7 @@ module Devise
 
         warden.raw_session.inspect # Without this inspect here. The session does not clear.
         warden.logout(scope)
+        warden.clear_strategies_cache!(:scope => scope)
         instance_variable_set(:"@current_#{scope}", nil)
 
         !!user
@@ -149,13 +150,15 @@ module Devise
       # Sign out all active users or scopes. This helper is useful for signing out all roles
       # in one click. This signs out ALL scopes in warden. Returns true if there was at least one logout
       # and false if there was no user logged in on all scopes.
-      def sign_out_all_scopes
+      def sign_out_all_scopes(lock=true)
         users = Devise.mappings.keys.map { |s| warden.user(:scope => s, :run_callbacks => false) }
 
         warden.raw_session.inspect
         warden.logout
         expire_devise_cached_variables!
-        
+        warden.clear_strategies_cache!
+        warden.lock! if lock
+
         users.any?
       end
 
@@ -237,11 +240,6 @@ module Devise
         redirect_to after_sign_in_path_for(resource)
       end
 
-      def redirect_location(scope, resource) #:nodoc:
-        ActiveSupport::Deprecation.warn "redirect_location in Devise is deprecated. Please use after_sign_in_path_for instead.", caller
-        after_sign_in_path_for(resource)
-      end
-
       def expire_session_data_after_sign_in!
         session.keys.grep(/^devise\./).each { |k| session.delete(k) }
       end
@@ -258,8 +256,8 @@ module Devise
       # Overwrite Rails' handle unverified request to sign out all scopes,
       # clear run strategies and remove cached variables.
       def handle_unverified_request
-        sign_out_all_scopes
-        warden.clear_strategies_cache!
+        sign_out_all_scopes(false)
+        request.env["devise.skip_storage"] = true
         expire_devise_cached_variables!
         super # call the default behaviour which resets the session
       end

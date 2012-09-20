@@ -22,10 +22,17 @@ module ActiveRecord
       end
 
       def inject_devise_content
-        inject_into_class(model_path, class_name, model_contents + <<CONTENT) if model_exists?
+        content = model_contents + <<CONTENT
   # Setup accessible (or protected) attributes for your model
   attr_accessible :email, :password, :password_confirmation, :remember_me
 CONTENT
+
+        class_path = class_name.to_s.split("::")
+
+        indent_depth = class_path.size - 1
+        content = content.split("\n").map { |line| "  " * indent_depth + line } .join("\n") << "\n"
+
+        inject_into_class(model_path, class_path.last, content) if model_exists?
       end
 
       def migration_data
@@ -47,9 +54,6 @@ CONTENT
       t.datetime :last_sign_in_at
       t.string   :current_sign_in_ip
       t.string   :last_sign_in_ip
-
-      ## Encryptable
-      # t.string :password_salt
 
       ## Confirmable
       # t.string   :confirmation_token

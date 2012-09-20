@@ -5,7 +5,7 @@ class DeviseController < Devise.parent_controller.constantize
   helper DeviseHelper
 
   helpers = %w(resource scope_name resource_name signed_in_resource
-               resource_class devise_mapping)
+               resource_class resource_params devise_mapping)
   hide_action *helpers
   helper_method *helpers
 
@@ -28,6 +28,10 @@ class DeviseController < Devise.parent_controller.constantize
     devise_mapping.to
   end
 
+  def resource_params
+    params[resource_name]
+  end
+
   # Returns a signed in resource from session (if one exists)
   def signed_in_resource
     warden.authenticate(:scope => resource_name)
@@ -38,17 +42,39 @@ class DeviseController < Devise.parent_controller.constantize
     @devise_mapping ||= request.env["devise.mapping"]
   end
 
+  # Override prefixes to consider the scoped view.
+  # Notice we need to check for the request due to a bug in
+  # Action Controller tests that forces _prefixes to be
+  # loaded before even having a request object.
+  def _prefixes #:nodoc:
+    @_prefixes ||= if self.class.scoped_views? && request && devise_mapping
+      super.unshift("#{devise_mapping.scoped_path}/#{controller_name}")
+    else
+      super
+    end
+  end
+
+  hide_action :_prefixes
+
   protected
 
   # Checks whether it's a devise mapped resource or not.
   def assert_is_devise_resource! #:nodoc:
     unknown_action! <<-MESSAGE unless devise_mapping
 Could not find devise mapping for path #{request.fullpath.inspect}.
-Maybe you forgot to wrap your route inside the scope block? For example:
+This may happen for two reasons:
 
-devise_scope :user do
-  match "/some/route" => "some_devise_controller"
-end
+1) You forgot to wrap your route inside the scope block. For example:
+
+  devise_scope :user do
+    match "/some/route" => "some_devise_controller"
+  end
+
+2) You are testing a Devise controller bypassing the router.
+   If so, you can explicitly tell Devise which mapping to use:
+
+   @request.env["devise.mapping"] = Devise.mappings[:user]
+
 MESSAGE
   end
 
@@ -68,9 +94,20 @@ MESSAGE
   end
 
   # Build a devise resource.
-  def build_resource(hash=nil)
-    hash ||= params[resource_name] || {}
-    self.resource = resource_class.new(hash)
+  # Assignment bypasses attribute protection when :unsafe option is passed
+  def build_resource(hash = nil, options = {})
+    hash ||= resource_params || {}
+
+    if options[:unsafe]
+      self.resource = resource_class.new.tap do |resource|
+        hash.each do |key, value|
+          setter = :"#{key}="
+          resource.send(setter, value) if resource.respond_to?(setter)
+        end
+      end
+    else
+      self.resource = resource_class.new(hash)
+    end
   end
 
   # Helper for use in before_filters where no authentication is required.
@@ -150,15 +187,6 @@ MESSAGE
   end
 
   def is_navigational_format?
-    Devise.navigational_formats.include?(request.format.try(:ref))
-  end
-
-  # Override prefixes to consider the scoped view.
-  def _prefixes #:nodoc:
-    @_prefixes ||= if self.class.scoped_views? && devise_mapping
-      super.unshift("#{devise_mapping.scoped_path}/#{controller_name}")
-    else
-      super
-    end
+    Devise.navigational_formats.include?(request_format)
   end
 end

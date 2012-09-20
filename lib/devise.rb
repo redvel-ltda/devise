@@ -6,28 +6,18 @@ require 'set'
 require 'securerandom'
 
 module Devise
-  autoload :Delegator,   'devise/delegator'
-  autoload :FailureApp,  'devise/failure_app'
-  autoload :OmniAuth,    'devise/omniauth'
-  autoload :ParamFilter, 'devise/param_filter'
-  autoload :Schema,      'devise/schema'
-  autoload :TestHelpers, 'devise/test_helpers'
+  autoload :Delegator,     'devise/delegator'
+  autoload :FailureApp,    'devise/failure_app'
+  autoload :OmniAuth,      'devise/omniauth'
+  autoload :ParamFilter,   'devise/param_filter'
+  autoload :TestHelpers,   'devise/test_helpers'
+  autoload :TimeInflector, 'devise/time_inflector'
 
   module Controllers
     autoload :Helpers, 'devise/controllers/helpers'
     autoload :Rememberable, 'devise/controllers/rememberable'
     autoload :ScopedViews, 'devise/controllers/scoped_views'
     autoload :UrlHelpers, 'devise/controllers/url_helpers'
-  end
-
-  module Encryptors
-    autoload :Base, 'devise/encryptors/base'
-    autoload :AuthlogicSha512, 'devise/encryptors/authlogic_sha512'
-    autoload :BCrypt, 'devise/encryptors/bcrypt'
-    autoload :ClearanceSha1, 'devise/encryptors/clearance_sha1'
-    autoload :RestfulAuthenticationSha1, 'devise/encryptors/restful_authentication_sha1'
-    autoload :Sha512, 'devise/encryptors/sha512'
-    autoload :Sha1, 'devise/encryptors/sha1'
   end
 
   module Mailers
@@ -53,15 +43,6 @@ module Devise
   # True values used to check params
   TRUE_VALUES = [true, 1, '1', 't', 'T', 'true', 'TRUE']
 
-  # Declare encryptors length which are used in migrations.
-  ENCRYPTORS_LENGTH = {
-    :sha1   => 40,
-    :sha512 => 128,
-    :clearance_sha1 => 40,
-    :restful_authentication_sha1 => 40,
-    :authlogic_sha512 => 128
-  }
-
   # Custom domain for cookies. Not set by default
   mattr_accessor :rememberable_options
   @@rememberable_options = {}
@@ -79,14 +60,12 @@ module Devise
   @@request_keys = []
 
   # Keys that should be case-insensitive.
-  # False by default for backwards compatibility.
   mattr_accessor :case_insensitive_keys
-  @@case_insensitive_keys = false
+  @@case_insensitive_keys = [ :email ]
 
   # Keys that should have whitespace stripped.
-  # False by default for backwards compatibility.
   mattr_accessor :strip_whitespace_keys
-  @@strip_whitespace_keys = false
+  @@strip_whitespace_keys = []
 
   # If http authentication is enabled by default.
   mattr_accessor :http_authenticatable
@@ -126,6 +105,10 @@ module Devise
   mattr_accessor :allow_unconfirmed_access_for
   @@allow_unconfirmed_access_for = 0.days
 
+  # Time interval the confirmation token is valid. nil = unlimited
+  mattr_accessor :confirm_within
+  @@confirm_within = nil
+
   # Defines which key will be used when confirming an account.
   mattr_accessor :confirmation_keys
   @@confirmation_keys = [ :email ]
@@ -139,13 +122,13 @@ module Devise
   mattr_accessor :timeout_in
   @@timeout_in = 30.minutes
 
+  # Authentication token expiration on timeout
+  mattr_accessor :expire_auth_token_on_timeout
+  @@expire_auth_token_on_timeout = false
+
   # Used to encrypt password. Please generate one with rake secret.
   mattr_accessor :pepper
   @@pepper = nil
-
-  # Used to define the password encryption algorithm.
-  mattr_accessor :encryptor
-  @@encryptor = nil
 
   # Scoped views. Since it relies on fallbacks to render default views, it's
   # turned off by default.
@@ -179,9 +162,8 @@ module Devise
   @@reset_password_keys = [ :email ]
 
   # Time interval you can reset your password with a reset password key
-  # Nil by default for backwards compatibility.
   mattr_accessor :reset_password_within
-  @@reset_password_within = nil
+  @@reset_password_within = 6.hours
 
   # The default scope which is used by warden.
   mattr_accessor :default_scope
@@ -223,36 +205,21 @@ module Devise
   mattr_accessor :router_name
   @@router_name = nil
 
-  # DEPRECATED CONFIG
+  # Set the omniauth path prefix so it can be overriden when
+  # Devise is used in a mountable engine
+  mattr_accessor :omniauth_path_prefix
+  @@omniauth_path_prefix = nil
 
-  # If true, uses salt as remember token and does not create it in the database.
-  # By default is false for backwards compatibility.
-  mattr_accessor :use_salt_as_remember_token
-  @@use_salt_as_remember_token = false
-
-  # Tells if devise should apply the schema in ORMs where devise declaration
-  # and schema belongs to the same class (as Datamapper and Mongoid).
-  mattr_accessor :apply_schema
-  @@apply_schema = true
-
-  def self.remember_across_browsers=(value)
-    warn "\n[DEVISE] Devise.remember_across_browsers is deprecated and has no effect. Please remove it.\n"
+  def self.encryptor=(value)
+    warn "\n[DEVISE] To select a encryption which isn't bcrypt, you should use devise-encryptable gem.\n"
   end
 
-  def self.confirm_within=(value)
-    warn "\n[DEVISE] Devise.confirm_within= is deprecated. Please set Devise.allow_unconfirmed_access_for= instead.\n"
-    Devise.allow_unconfirmed_access_for = value
+  def self.use_salt_as_remember_token=(value)
+    warn "\n[DEVISE] Devise.use_salt_as_remember_token is deprecated and has no effect. Please remove it.\n"
   end
 
-  def self.cookie_options=(value)
-    warn "\n[DEVISE] Devise.cookie_options= is deprecated. Please set Devise.rememberable_options= instead.\n"
-    Devise.rememberable_options = value
-  end
-
-  def self.stateless_token=(value)
-    warn "\n[DEVISE] Devise.stateless_token= is deprecated. Please append :token_auth to Devise.skip_session_storage " \
-      "instead, for example: Devise.skip_session_storage << :token_auth\n"
-    Devise.skip_session_storage << :token_auth
+  def self.apply_schema=(value)
+    warn "\n[DEVISE] Devise.apply_schema is deprecated and has no effect. Please remove it.\n"
   end
 
   # PRIVATE CONFIGURATION

@@ -1,7 +1,7 @@
 require 'test_helper'
 
 class Configurable < User
-  devise :database_authenticatable, :encryptable, :confirmable, :rememberable, :timeoutable, :lockable,
+  devise :database_authenticatable, :confirmable, :rememberable, :timeoutable, :lockable,
          :stretches => 15, :pepper => 'abcdef', :allow_unconfirmed_access_for => 5.days,
          :remember_for => 7.days, :timeout_in => 15.minutes, :unlock_in => 10.days
 end
@@ -25,7 +25,7 @@ end
 class ActiveRecordTest < ActiveSupport::TestCase
   def include_module?(klass, mod)
     klass.devise_modules.include?(mod) &&
-    klass.included_modules.include?(Devise::Models::const_get(mod.to_s.classify))
+      klass.included_modules.include?(Devise::Models::const_get(mod.to_s.classify))
   end
 
   def assert_include_modules(klass, *modules)
@@ -39,7 +39,7 @@ class ActiveRecordTest < ActiveSupport::TestCase
   end
 
   test 'can cherry pick modules' do
-    assert_include_modules Admin, :database_authenticatable, :registerable, :timeoutable, :recoverable, :lockable, :encryptable, :confirmable
+    assert_include_modules Admin, :database_authenticatable, :registerable, :timeoutable, :recoverable, :lockable, :confirmable
   end
 
   test 'validations options are not applied too late' do
@@ -55,12 +55,12 @@ class ActiveRecordTest < ActiveSupport::TestCase
   end
 
   test 'chosen modules are inheritable' do
-    assert_include_modules Inheritable, :database_authenticatable, :registerable, :timeoutable, :recoverable, :lockable, :encryptable, :confirmable
+    assert_include_modules Inheritable, :database_authenticatable, :registerable, :timeoutable, :recoverable, :lockable, :confirmable
   end
 
   test 'order of module inclusion' do
-    correct_module_order   = [:database_authenticatable, :encryptable, :recoverable, :registerable, :confirmable, :lockable, :timeoutable]
-    incorrect_module_order = [:database_authenticatable, :timeoutable, :registerable, :recoverable, :lockable, :encryptable, :confirmable]
+    correct_module_order   = [:database_authenticatable, :recoverable, :registerable, :confirmable, :lockable, :timeoutable]
+    incorrect_module_order = [:database_authenticatable, :timeoutable, :registerable, :recoverable, :lockable, :confirmable]
 
     assert_include_modules Admin, *incorrect_module_order
 
@@ -153,13 +153,13 @@ class CheckFieldsTest < ActiveSupport::TestCase
       devise :database_authenticatable
     end
 
-    exception = assert_raise_with_message Devise::Models::MissingAttribute, "The following attribute(s) is (are) missing on your model: encrypted_password, email" do
+    assert_raise_with_message Devise::Models::MissingAttribute, "The following attribute(s) is (are) missing on your model: encrypted_password, email" do
       Devise::Models.check_fields!(Magician)
     end
   end
 
   test "doesn't raise a NoMethodError exception when the module doesn't have a required_field(klass) class method" do
-     driver = Class.new do
+    driver = Class.new do
       extend Devise::Models
 
       def self.before_validation(instance)

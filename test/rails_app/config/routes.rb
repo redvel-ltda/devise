@@ -9,7 +9,9 @@ Rails.application.routes.draw do
     end
   end
 
-  resources :admins, :only => [:index]
+  resources :admins, :only => [:index] do
+    get :expire, :on => :member
+  end
 
   # Users scope
   devise_for :users, :controllers => { :omniauth_callbacks => "users/omniauth_callbacks" }
@@ -30,8 +32,16 @@ Rails.application.routes.draw do
     match "/private", :to => "home#private", :as => :private
   end
 
+  authenticate(:admin, lambda { |admin| admin.active? }) do
+    match "/private/active", :to => "home#private", :as => :private_active
+  end
+
   authenticated :admin do
     match "/dashboard", :to => "home#admin_dashboard"
+  end
+
+  authenticated :admin, lambda { |admin| admin.active? } do
+    match "/dashboard/active", :to => "home#admin_dashboard"
   end
 
   authenticated do
@@ -84,6 +94,7 @@ Rails.application.routes.draw do
 
   match "/set", :to => "home#set"
   match "/unauthenticated", :to => "home#unauthenticated"
+  match "/custom_strategy/new"
 
   root :to => "home#index"
 end

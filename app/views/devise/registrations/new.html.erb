@@ -4,7 +4,7 @@
   <%= devise_error_messages! %>
 
   <div><%= f.label :email, t('devise.attributes.email') %><br />
-  <%= f.email_field :email %></div>
+  <%= f.email_field :email, :autofocus => true %></div>
 
   <div><%= f.label :password, t('devise.attributes.password') %><br />
   <%= f.password_field :password %></div>
@@ -15,4 +15,4 @@
   <div><%= f.submit t('devise.views.registrations.new.submit') %></div>
 <% end %>
 
-<%= render :partial => "devise/shared/links" %>
+<%= render "devise/shared/links" %>

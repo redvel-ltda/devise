@@ -25,7 +25,7 @@ class SessionTimeoutTest < ActionController::IntegrationTest
     assert_equal old_last_request, last_request_at
   end
 
-  test 'not time out user session before default limit time' do
+  test 'does not time out user session before default limit time' do
     sign_in_as_user
     assert_response :success
     assert warden.authenticated?(:user)
@@ -53,10 +53,36 @@ class SessionTimeoutTest < ActionController::IntegrationTest
 
     assert_response :redirect
     assert_redirected_to root_path
-
     follow_redirect!
-
     assert_contain 'Signed out successfully'
+  end
+
+  test 'time out is not triggered on sign in' do
+    user = sign_in_as_user
+    get expire_user_path(user)
+
+    post "/users/sign_in", :email => user.email, :password => "123456"
+
+    assert_response :redirect
+    follow_redirect!
+    assert_contain 'You are signed in'
+  end
+
+  test 'admin does not explode on time out' do
+    admin = sign_in_as_admin
+    get expire_admin_path(admin)
+
+    Admin.send :define_method, :reset_authentication_token! do
+      nil
+    end
+
+    begin
+      get admins_path
+      assert_redirected_to admins_path
+      assert_not warden.authenticated?(:admin)
+    ensure
+      Admin.send(:remove_method, :reset_authentication_token!)
+    end
   end
 
   test 'user configured timeout limit' do

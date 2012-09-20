@@ -1,10 +1,11 @@
 class Devise::SessionsController < DeviseController
   prepend_before_filter :require_no_authentication, :only => [ :new, :create ]
   prepend_before_filter :allow_params_authentication!, :only => :create
+  prepend_before_filter { request.env["devise.skip_timeout"] = true }
 
   # GET /resource/sign_in
   def new
-    resource = build_resource
+    resource = build_resource(nil, :unsafe => true)
     clean_up_passwords(resource)
     respond_with(resource, serialize_options(resource))
   end
@@ -21,16 +22,14 @@ class Devise::SessionsController < DeviseController
   def destroy
     redirect_path = after_sign_out_path_for(resource_name)
     signed_out = (Devise.sign_out_all_scopes ? sign_out : sign_out(resource_name))
-    set_flash_message :notice, :signed_out if signed_out
+    set_flash_message :notice, :signed_out if signed_out && is_navigational_format?
 
     # We actually need to hardcode this as Rails default responder doesn't
     # support returning empty response on GET request
     respond_to do |format|
       format.any(*navigational_formats) { redirect_to redirect_path }
       format.all do
-        method = "to_#{request_format}"
-        text = {}.respond_to?(method) ? {}.send(method) : ""
-        render :text => text, :status => :ok
+        head :no_content
       end
     end
   end

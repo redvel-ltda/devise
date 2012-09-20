@@ -14,15 +14,6 @@ class LockableTest < ActiveSupport::TestCase
     end
   end
 
-  test "should clear failed_attempts on successfull validation" do
-    user = create_user
-    user.confirm!
-    user.valid_for_authentication?{ false }
-    assert_equal 1, user.reload.failed_attempts
-    user.valid_for_authentication?{ true }
-    assert_equal 0, user.reload.failed_attempts
-  end
-
   test "should increment failed_attempts on successfull validation if the user is already locked" do
     user = create_user
     user.confirm!
@@ -241,19 +232,19 @@ class LockableTest < ActiveSupport::TestCase
       swap Devise, :lock_strategy => :failed_attempts do
         assert_same_content Devise::Models::Lockable.required_fields(User), [
          :failed_attempts,
-         :unlock_at,
+         :locked_at,
          :unlock_token
         ]
       end
     end
   end
 
-  test 'required_fields should contain only failed_attempts and unlock_at when the strategies are time and failed_attempts are enabled' do
+  test 'required_fields should contain only failed_attempts and locked_at when the strategies are time and failed_attempts are enabled' do
     swap Devise, :unlock_strategy => :time do
       swap Devise, :lock_strategy => :failed_attempts do
         assert_same_content Devise::Models::Lockable.required_fields(User), [
          :failed_attempts,
-         :unlock_at
+         :locked_at
         ]
       end
     end

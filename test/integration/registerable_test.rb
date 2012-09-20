@@ -144,7 +144,7 @@ class RegistrationTest < ActionController::IntegrationTest
     get edit_user_registration_path
 
     fill_in 'email', :with => 'user.new@example.com'
-    fill_in 'current password', :with => '123456'
+    fill_in 'current password', :with => '12345678'
     click_button 'Update'
 
     assert_current_url '/'
@@ -157,9 +157,9 @@ class RegistrationTest < ActionController::IntegrationTest
     sign_in_as_user
     get edit_user_registration_path
 
-    fill_in 'password', :with => '12345678'
-    fill_in 'password confirmation', :with => '12345678'
-    fill_in 'current password', :with => '123456'
+    fill_in 'password', :with => '1234567890'
+    fill_in 'password confirmation', :with => '1234567890'
+    fill_in 'current password', :with => '12345678'
     click_button 'Update'
 
     assert_contain 'You updated your account successfully.'
@@ -186,15 +186,15 @@ class RegistrationTest < ActionController::IntegrationTest
     sign_in_as_user
     get edit_user_registration_path
 
-    fill_in 'password', :with => 'pas123'
-    fill_in 'password confirmation', :with => 'pas123'
-    fill_in 'current password', :with => '123456'
+    fill_in 'password', :with => 'pass1234'
+    fill_in 'password confirmation', :with => 'pass1234'
+    fill_in 'current password', :with => '12345678'
     click_button 'Update'
 
     assert_current_url '/'
     assert_contain 'You updated your account successfully.'
 
-    assert User.first.valid_password?('pas123')
+    assert User.first.valid_password?('pass1234')
   end
 
   test 'a signed in user should not be able to edit his password with invalid confirmation' do
@@ -272,7 +272,7 @@ class RegistrationTest < ActionController::IntegrationTest
 
   test 'a user update information with valid data in XML format should return valid response' do
     user = sign_in_as_user
-    put user_registration_path(:format => 'xml'), :user => { :current_password => '123456', :email => 'user.new@test.com' }
+    put user_registration_path(:format => 'xml'), :user => { :current_password => '12345678', :email => 'user.new@test.com' }
     assert_response :success
     assert_equal user.reload.email, 'user.new@test.com'
   end
@@ -319,6 +319,27 @@ class ReconfirmableRegistrationTest < ActionController::IntegrationTest
     assert_current_url '/admin_area/home'
     assert_contain 'You updated your account successfully.'
 
+    assert Admin.first.valid_password?('pas123')
+  end
+
+  test 'a signed in admin should not see a reconfirmation message if he did not change his email, despite having an unconfirmed email' do
+    sign_in_as_admin
+
+    get edit_admin_registration_path
+    fill_in 'email', :with => 'admin.new@example.com'
+    fill_in 'current password', :with => '123456'
+    click_button 'Update'
+
+    get edit_admin_registration_path
+    fill_in 'password', :with => 'pas123'
+    fill_in 'password confirmation', :with => 'pas123'
+    fill_in 'current password', :with => '123456'
+    click_button 'Update'
+
+    assert_current_url '/admin_area/home'
+    assert_contain 'You updated your account successfully.'
+
+    assert_equal "admin.new@example.com", Admin.first.unconfirmed_email
     assert Admin.first.valid_password?('pas123')
   end
 end

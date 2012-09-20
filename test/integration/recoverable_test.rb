@@ -126,6 +126,12 @@ class PasswordTest < ActionController::IntegrationTest
     assert warden.authenticated?(:user)
   end
 
+  test 'not authenticated user without a reset password token should not be able to visit the page' do
+    get edit_user_password_path
+    assert_response :redirect
+    assert_redirected_to "/users/sign_in"
+  end
+
   test 'not authenticated user with invalid reset password token should not be able to change his password' do
     user = create_user
     reset_password :reset_password_token => 'invalid_reset_password'
@@ -268,7 +274,7 @@ class PasswordTest < ActionController::IntegrationTest
 
       assert_not_contain "1 error prohibited this user from being saved:"
       assert_not_contain "Email not found"
-      assert_contain "If your e-mail exists on our database, you will receive a password recovery link on your e-mail"
+      assert_contain "If your email address exists in our database, you will receive a password recovery link at your email address in a few minutes."
       assert_current_url "/users/sign_in"
     end
   end
@@ -280,8 +286,21 @@ class PasswordTest < ActionController::IntegrationTest
       fill_in 'email', :with => user.email
       click_button 'Send me reset password instructions'
 
-      assert_contain "If your e-mail exists on our database, you will receive a password recovery link on your e-mail"
+      assert_contain "If your email address exists in our database, you will receive a password recovery link at your email address in a few minutes."
       assert_current_url "/users/sign_in"
     end
+  end
+
+  test "after recovering a password, should set failed attempts to 0" do
+    user = create_user
+    user.update_attribute(:failed_attempts, 10)
+
+    assert_equal 10, user.failed_attempts
+    request_forgot_password
+    reset_password :reset_password_token => user.reload.reset_password_token
+
+    assert warden.authenticated?(:user)
+    user.reload
+    assert_equal 0, user.failed_attempts
   end
 end

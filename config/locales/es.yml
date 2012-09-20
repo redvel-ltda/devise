@@ -38,7 +38,9 @@ es:
 
     registrations:
       signed_up: '¡Bienvenido! Te registraste en forma exitosa.'
-      inactive_signed_up: 'Te registraste en forma exitosa. Sin embargo, no pudimos ingresarte debido a que %{reason}.'
+      signed_up_but_inactive: 'Te registraste en forma exitosa. Sin embargo, no pudimos ingresarte debido a que tu cuenta no ha sido activada aún.'
+      signed_up_but_locked: 'Te registraste en forma exitosa. Sin embargo, no pudimos ingresarte debido a que tu cuenta está bloqueada.'
+      signed_up_but_unconfirmed: 'Se ha enviado un correo para que confirmes tu registro. Cuando entres al vínculo enviado podrás entrar.'
       updated: 'Has actualizado tu cuenta satisfactoriamente.'
       destroyed: '¡Chao! Tu cuenta fue eliminada exitosamente. Esperamos verte de nuevo.'
 

@@ -50,6 +50,30 @@ class ConfirmationTest < ActionController::IntegrationTest
     assert user.reload.confirmed?
   end
 
+  test 'user with valid confirmation token should not be able to confirm an account after the token has expired' do
+    swap Devise, :confirm_within => 3.days do
+      user = create_user(:confirm => false, :confirmation_sent_at => 4.days.ago)
+      assert_not user.confirmed?
+      visit_user_confirmation_with_token(user.confirmation_token)
+
+      assert_have_selector '#error_explanation'
+      assert_contain /needs to be confirmed within 3 days/
+      assert_not user.reload.confirmed?
+    end
+  end
+
+  test 'user with valid confirmation token should be able to confirm an account before the token has expired' do
+    swap Devise, :confirm_within => 3.days do
+      user = create_user(:confirm => false, :confirmation_sent_at => 2.days.ago)
+      assert_not user.confirmed?
+      visit_user_confirmation_with_token(user.confirmation_token)
+
+      assert_contain 'Your account was successfully confirmed.'
+      assert_current_url '/'
+      assert user.reload.confirmed?
+    end
+  end
+
   test 'user should be redirected to a custom path after confirmation' do
     Devise::ConfirmationsController.any_instance.stubs(:after_confirmation_path_for).returns("/?custom=1")
 
@@ -180,7 +204,7 @@ class ConfirmationTest < ActionController::IntegrationTest
       fill_in 'email', :with => user.email
       click_button 'Resend confirmation instructions'
 
-      assert_contain "If your e-mail exists on our database, you will receive an email with instructions about how to confirm your account in a few minutes."
+      assert_contain "If your email address exists in our database, you will receive an email with instructions about how to confirm your account in a few minutes."
       assert_current_url "/users/sign_in"
     end
   end
@@ -196,7 +220,7 @@ class ConfirmationTest < ActionController::IntegrationTest
       assert_not_contain "1 error prohibited this user from being saved:"
       assert_not_contain "Email not found"
 
-      assert_contain "If your e-mail exists on our database, you will receive an email with instructions about how to confirm your account in a few minutes."
+      assert_contain "If your email address exists in our database, you will receive an email with instructions about how to confirm your account in a few minutes."
       assert_current_url "/users/sign_in"
     end
   end
@@ -234,6 +258,25 @@ class ConfirmationOnChangeTest < ActionController::IntegrationTest
     assert_equal 'new_test@example.com', admin.unconfirmed_email
     visit_admin_confirmation_with_token(admin.confirmation_token)
 
+    assert_contain 'Your account was successfully confirmed.'
+    assert_current_url '/admin_area/home'
+    assert admin.reload.confirmed?
+    assert_not admin.reload.pending_reconfirmation?
+  end
+
+  test 'admin with previously valid confirmation token should not be able to confirm email after email changed again' do
+    admin = create_admin
+    admin.update_attributes(:email => 'first_test@example.com')
+    assert_equal 'first_test@example.com', admin.unconfirmed_email
+    confirmation_token = admin.confirmation_token
+    admin.update_attributes(:email => 'second_test@example.com')
+    assert_equal 'second_test@example.com', admin.unconfirmed_email
+
+    visit_admin_confirmation_with_token(confirmation_token)
+    assert_have_selector '#error_explanation'
+    assert_contain /Confirmation token(.*)invalid/
+
+    visit_admin_confirmation_with_token(admin.confirmation_token)
     assert_contain 'Your account was successfully confirmed.'
     assert_current_url '/admin_area/home'
     assert admin.reload.confirmed?

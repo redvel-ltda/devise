@@ -1,4 +1,5 @@
 require "active_support/core_ext/object/try"
+require "active_support/core_ext/hash/slice"
 
 module ActionDispatch::Routing
   class RouteSet #:nodoc:
@@ -42,20 +43,20 @@ module ActionDispatch::Routing
     # needed routes:
     #
     #  # Session routes for Authenticatable (default)
-    #       new_user_session GET  /users/sign_in                    {:controller=>"devise/sessions", :action=>"new"}
-    #           user_session POST /users/sign_in                    {:controller=>"devise/sessions", :action=>"create"}
-    #   destroy_user_session GET  /users/sign_out                   {:controller=>"devise/sessions", :action=>"destroy"}
+    #       new_user_session GET    /users/sign_in                    {:controller=>"devise/sessions", :action=>"new"}
+    #           user_session POST   /users/sign_in                    {:controller=>"devise/sessions", :action=>"create"}
+    #   destroy_user_session DELETE /users/sign_out                   {:controller=>"devise/sessions", :action=>"destroy"}
     #
     #  # Password routes for Recoverable, if User model has :recoverable configured
-    #      new_user_password GET  /users/password/new(.:format)     {:controller=>"devise/passwords", :action=>"new"}
-    #     edit_user_password GET  /users/password/edit(.:format)    {:controller=>"devise/passwords", :action=>"edit"}
-    #          user_password PUT  /users/password(.:format)         {:controller=>"devise/passwords", :action=>"update"}
-    #                        POST /users/password(.:format)         {:controller=>"devise/passwords", :action=>"create"}
+    #      new_user_password GET    /users/password/new(.:format)     {:controller=>"devise/passwords", :action=>"new"}
+    #     edit_user_password GET    /users/password/edit(.:format)    {:controller=>"devise/passwords", :action=>"edit"}
+    #          user_password PUT    /users/password(.:format)         {:controller=>"devise/passwords", :action=>"update"}
+    #                        POST   /users/password(.:format)         {:controller=>"devise/passwords", :action=>"create"}
     #
     #  # Confirmation routes for Confirmable, if User model has :confirmable configured
-    #  new_user_confirmation GET  /users/confirmation/new(.:format) {:controller=>"devise/confirmations", :action=>"new"}
-    #      user_confirmation GET  /users/confirmation(.:format)     {:controller=>"devise/confirmations", :action=>"show"}
-    #                        POST /users/confirmation(.:format)     {:controller=>"devise/confirmations", :action=>"create"}
+    #  new_user_confirmation GET    /users/confirmation/new(.:format) {:controller=>"devise/confirmations", :action=>"new"}
+    #      user_confirmation GET    /users/confirmation(.:format)     {:controller=>"devise/confirmations", :action=>"show"}
+    #                        POST   /users/confirmation(.:format)     {:controller=>"devise/confirmations", :action=>"create"}
     #
     # ==== Options
     #
@@ -136,7 +137,7 @@ module ActionDispatch::Routing
     #
     #      devise_for :users, :format => false
     #
-    #  * :constraints => works the same as Rails' contraints
+    #  * :constraints => works the same as Rails' constraints
     #
     #  * :defaults => works the same as Rails' defaults
     #
@@ -182,7 +183,7 @@ module ActionDispatch::Routing
     #      end
     #    end
     #
-    # In order to get Devise to recognize the deactivate action, your devise_for entry should look like this,
+    # In order to get Devise to recognize the deactivate action, your devise_scope entry should look like this:
     #
     #     devise_scope :owner do
     #       post "deactivate", :to => "registrations#deactivate", :as => "deactivate_registration"
@@ -236,7 +237,9 @@ module ActionDispatch::Routing
       end
     end
 
-    # Allow you to add authentication request from the router:
+    # Allow you to add authentication request from the router.
+    # Takes an optional scope and block to provide constraints
+    # on the model instance itself.
     #
     #   authenticate do
     #     resources :post
@@ -246,9 +249,13 @@ module ActionDispatch::Routing
     #     resources :users
     #   end
     #
-    def authenticate(scope=nil)
+    #   authenticate :user, lambda {|u| u.role == "admin"} do
+    #     root :to => "admin/dashboard#show"
+    #   end
+    #
+    def authenticate(scope=nil, block=nil)
       constraint = lambda do |request|
-        request.env["warden"].authenticate!(:scope => scope)
+        request.env["warden"].authenticate!(:scope => scope) && (block.nil? || block.call(request.env["warden"].user(scope)))
       end
 
       constraints(constraint) do
@@ -257,7 +264,8 @@ module ActionDispatch::Routing
     end
 
     # Allow you to route based on whether a scope is authenticated. You
-    # can optionally specify which scope.
+    # can optionally specify which scope and a block. The block accepts
+    # a model and allows extra constraints to be done on the instance.
     #
     #   authenticated :admin do
     #     root :to => 'admin/dashboard#show'
@@ -267,11 +275,15 @@ module ActionDispatch::Routing
     #     root :to => 'dashboard#show'
     #   end
     #
+    #   authenticated :user, lambda {|u| u.role == "admin"} do
+    #     root :to => "admin/dashboard#show"
+    #   end
+    #
     #   root :to => 'landing#show'
     #
-    def authenticated(scope=nil)
+    def authenticated(scope=nil, block=nil)
       constraint = lambda do |request|
-        request.env["warden"].authenticate? :scope => scope
+        request.env["warden"].authenticate?(:scope => scope) && (block.nil? || block.call(request.env["warden"].user(scope)))
       end
 
       constraints(constraint) do
@@ -367,16 +379,54 @@ module ActionDispatch::Routing
           :cancel => mapping.path_names[:cancel]
         }
 
-        resource :registration, :only => [:new, :create, :edit, :update, :destroy], :path => mapping.path_names[:registration],
-                 :path_names => path_names, :controller => controllers[:registrations] do
+        options = {
+          :only => [:new, :create, :edit, :update, :destroy],
+          :path => mapping.path_names[:registration],
+          :path_names => path_names,
+          :controller => controllers[:registrations]
+        }
+
+        resource :registration, options do
           get :cancel
         end
       end
 
       def devise_omniauth_callback(mapping, controllers) #:nodoc:
         path, @scope[:path] = @scope[:path], nil
-        path_prefix = "/#{mapping.path}/auth".squeeze("/")
+        path_prefix = Devise.omniauth_path_prefix || "/#{mapping.path}/auth".squeeze("/")
+        set_omniauth_path_prefix!(path_prefix)
 
+        providers = Regexp.union(mapping.to.omniauth_providers.map(&:to_s))
+
+        match "#{path_prefix}/:provider",
+          :constraints => { :provider => providers },
+          :to => "#{controllers[:omniauth_callbacks]}#passthru",
+          :as => :omniauth_authorize
+
+        match "#{path_prefix}/:action/callback",
+          :constraints => { :action => providers },
+          :to => controllers[:omniauth_callbacks],
+          :as => :omniauth_callback
+      ensure
+        @scope[:path] = path
+      end
+
+      DEVISE_SCOPE_KEYS = [:as, :path, :module, :constraints, :defaults, :options]
+
+      def with_devise_exclusive_scope(new_path, new_as, options) #:nodoc:
+        old = {}
+        DEVISE_SCOPE_KEYS.each { |k| old[k] = @scope[k] }
+
+        new = { :as => new_as, :path => new_path, :module => nil }
+        new.merge!(options.slice(:constraints, :defaults, :options))
+
+        @scope.merge!(new)
+        yield
+      ensure
+        @scope.merge!(old)
+      end
+
+      def set_omniauth_path_prefix!(path_prefix) #:nodoc:
         if ::OmniAuth.config.path_prefix && ::OmniAuth.config.path_prefix != path_prefix
           raise "Wrong OmniAuth configuration. If you are getting this exception, it means that either:\n\n" \
             "1) You are manually setting OmniAuth.config.path_prefix and it doesn't match the Devise one\n" \
@@ -385,22 +435,6 @@ module ActionDispatch::Routing
         else
           ::OmniAuth.config.path_prefix = path_prefix
         end
-
-        match "#{path_prefix}/:action/callback", :constraints => { :action => Regexp.union(mapping.to.omniauth_providers.map(&:to_s)) },
-          :to => controllers[:omniauth_callbacks], :as => :omniauth_callback
-      ensure
-        @scope[:path] = path
-      end
-
-      def with_devise_exclusive_scope(new_path, new_as, options) #:nodoc:
-        old_as, old_path, old_module, old_constraints, old_defaults, old_options =
-          *@scope.values_at(:as, :path, :module, :constraints, :defaults, :options)
-        @scope[:as], @scope[:path], @scope[:module], @scope[:constraints], @scope[:defaults], @scope[:options] =
-          new_as, new_path, nil, *options.values_at(:constraints, :defaults, :options)
-        yield
-      ensure
-        @scope[:as], @scope[:path], @scope[:module], @scope[:constraints], @scope[:defaults], @scope[:options] =
-          old_as, old_path, old_module, old_constraints, old_defaults, old_options
       end
 
       def raise_no_devise_method_error!(klass) #:nodoc:

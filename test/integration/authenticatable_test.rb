@@ -75,80 +75,6 @@ class AuthenticationSanityTest < ActionController::IntegrationTest
     assert_not warden.authenticated?(:admin)
   end
 
-  test 'not signed in as admin should not be able to access private route restricted to admins' do
-    get private_path
-    assert_redirected_to new_admin_session_path
-    assert_not warden.authenticated?(:admin)
-  end
-
-  test 'signed in as user should not be able to access private route restricted to admins' do
-    sign_in_as_user
-    assert warden.authenticated?(:user)
-    assert_not warden.authenticated?(:admin)
-    get private_path
-    assert_redirected_to new_admin_session_path
-  end
-
-  test 'signed in as admin should be able to access private route restricted to admins' do
-    sign_in_as_admin
-    assert warden.authenticated?(:admin)
-    assert_not warden.authenticated?(:user)
-
-    get private_path
-
-    assert_response :success
-    assert_template 'home/private'
-    assert_contain 'Private!'
-  end
-
-  test 'signed in as admin should get admin dashboard' do
-    sign_in_as_admin
-    assert warden.authenticated?(:admin)
-    assert_not warden.authenticated?(:user)
-
-    get dashboard_path
-
-    assert_response :success
-    assert_template 'home/admin'
-    assert_contain 'Admin dashboard'
-  end
-
-  test 'signed in as user should get user dashboard' do
-    sign_in_as_user
-    assert warden.authenticated?(:user)
-    assert_not warden.authenticated?(:admin)
-
-    get dashboard_path
-
-    assert_response :success
-    assert_template 'home/user'
-    assert_contain 'User dashboard'
-  end
-
-  test 'not signed in should get no dashboard' do
-    assert_raises ActionController::RoutingError do
-      get dashboard_path
-    end
-  end
-
-  test 'signed in user should not see unauthenticated page' do
-    sign_in_as_user
-    assert warden.authenticated?(:user)
-    assert_not warden.authenticated?(:admin)
-
-    assert_raises ActionController::RoutingError do
-      get join_path
-    end
-  end
-
-  test 'not signed in users should see unautheticated page' do
-    get join_path
-
-    assert_response :success
-    assert_template 'home/join'
-    assert_contain 'Join'
-  end
-
   test 'signed in as user should not be able to access admins actions' do
     sign_in_as_user
     assert warden.authenticated?(:user)
@@ -205,6 +131,126 @@ class AuthenticationSanityTest < ActionController::IntegrationTest
     put "/en/accounts/management"
     assert_equal "Oops, not found", response.body
     assert_equal 404, response.status
+  end
+end
+
+class AuthenticationRoutesRestrictions < ActionController::IntegrationTest
+  test 'not signed in should not be able to access private route (authenticate denied)' do
+    get private_path
+    assert_redirected_to new_admin_session_path
+    assert_not warden.authenticated?(:admin)
+  end
+
+  test 'signed in as user should not be able to access private route restricted to admins (authenticate denied)' do
+    sign_in_as_user
+    assert warden.authenticated?(:user)
+    assert_not warden.authenticated?(:admin)
+    get private_path
+    assert_redirected_to new_admin_session_path
+  end
+
+  test 'signed in as admin should be able to access private route restricted to admins (authenticate accepted)' do
+    sign_in_as_admin
+    assert warden.authenticated?(:admin)
+    assert_not warden.authenticated?(:user)
+
+    get private_path
+
+    assert_response :success
+    assert_template 'home/private'
+    assert_contain 'Private!'
+  end
+
+  test 'signed in as inactive admin should not be able to access private/active route restricted to active admins (authenticate denied)' do
+    sign_in_as_admin(:active => false)
+    assert warden.authenticated?(:admin)
+    assert_not warden.authenticated?(:user)
+
+    assert_raises ActionController::RoutingError do
+      get "/private/active"
+    end
+  end
+
+  test 'signed in as active admin should be able to access private/active route restricted to active admins (authenticate accepted)' do
+    sign_in_as_admin(:active => true)
+    assert warden.authenticated?(:admin)
+    assert_not warden.authenticated?(:user)
+
+    get private_active_path
+
+    assert_response :success
+    assert_template 'home/private'
+    assert_contain 'Private!'
+  end
+
+  test 'signed in as admin should get admin dashboard (authenticated accepted)' do
+    sign_in_as_admin
+    assert warden.authenticated?(:admin)
+    assert_not warden.authenticated?(:user)
+
+    get dashboard_path
+
+    assert_response :success
+    assert_template 'home/admin'
+    assert_contain 'Admin dashboard'
+  end
+
+  test 'signed in as user should get user dashboard (authenticated accepted)' do
+    sign_in_as_user
+    assert warden.authenticated?(:user)
+    assert_not warden.authenticated?(:admin)
+
+    get dashboard_path
+
+    assert_response :success
+    assert_template 'home/user'
+    assert_contain 'User dashboard'
+  end
+
+  test 'not signed in should get no dashboard (authenticated denied)' do
+    assert_raises ActionController::RoutingError do
+      get dashboard_path
+    end
+  end
+
+  test 'signed in as inactive admin should not be able to access dashboard/active route restricted to active admins (authenticated denied)' do
+    sign_in_as_admin(:active => false)
+    assert warden.authenticated?(:admin)
+    assert_not warden.authenticated?(:user)
+
+    assert_raises ActionController::RoutingError do
+      get "/dashboard/active"
+    end
+  end
+
+  test 'signed in as active admin should be able to access dashboard/active route restricted to active admins (authenticated accepted)' do
+    sign_in_as_admin(:active => true)
+    assert warden.authenticated?(:admin)
+    assert_not warden.authenticated?(:user)
+
+    get dashboard_active_path
+
+    assert_response :success
+    assert_template 'home/admin_dashboard'
+    assert_contain 'Admin dashboard'
+  end
+
+  test 'signed in user should not see unauthenticated page (unauthenticated denied)' do
+    sign_in_as_user
+    assert warden.authenticated?(:user)
+    assert_not warden.authenticated?(:admin)
+
+    assert_raises ActionController::RoutingError do
+      get join_path
+    end
+  end
+
+  test 'not signed in users should see unautheticated page (unauthenticated accepted)' do
+    get join_path
+
+    assert_response :success
+    assert_template 'home/join'
+    assert_contain 'Join'
   end
 end
 
@@ -437,7 +483,7 @@ class AuthenticationOthersTest < ActionController::IntegrationTest
 
   test 'sign in with xml format returns xml response' do
     create_user
-    post user_session_path(:format => 'xml'), :user => {:email => "user@test.com", :password => '123456'}
+    post user_session_path(:format => 'xml'), :user => {:email => "user@test.com", :password => '12345678'}
     assert_response :success
     assert response.body.include? %(<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<user>)
   end
@@ -447,13 +493,13 @@ class AuthenticationOthersTest < ActionController::IntegrationTest
     assert_response :success
 
     create_user
-    post user_session_path(:format => 'xml'), :user => {:email => "user@test.com", :password => '123456'}
+    post user_session_path(:format => 'xml'), :user => {:email => "user@test.com", :password => '12345678'}
     assert_response :success
 
     get new_user_session_path(:format => 'xml')
     assert_response :success
 
-    post user_session_path(:format => 'xml'), :user => {:email => "user@test.com", :password => '123456'}
+    post user_session_path(:format => 'xml'), :user => {:email => "user@test.com", :password => '12345678'}
     assert_response :success
     assert response.body.include? %(<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<user>)
   end
@@ -461,14 +507,14 @@ class AuthenticationOthersTest < ActionController::IntegrationTest
   test 'sign out with xml format returns ok response' do
     sign_in_as_user
     get destroy_user_session_path(:format => 'xml')
-    assert_response :ok
+    assert_response :no_content
     assert_not warden.authenticated?(:user)
   end
 
   test 'sign out with json format returns empty json response' do
     sign_in_as_user
     get destroy_user_session_path(:format => 'json')
-    assert_response :ok
+    assert_response :no_content
     assert_not warden.authenticated?(:user)
   end
 end

@@ -9,7 +9,7 @@ module Devise
       attr_accessor :authentication_hash, :authentication_type, :password
 
       def store?
-        !mapping.to.skip_session_storage.include?(authentication_type)
+        super && !mapping.to.skip_session_storage.include?(authentication_type)
       end
 
       def valid?
@@ -18,13 +18,24 @@ module Devise
 
     private
 
-      # Simply invokes valid_for_authentication? with the given block and deal with the result.
+      # Receives a resource and check if it is valid by calling valid_for_authentication?
+      # An optional block that will be triggered while validating can be optionally
+      # given as parameter. Check Devise::Models::Authenticable.valid_for_authentication?
+      # for more information.
+      #
+      # In case the resource can't be validated, it will fail with the given
+      # unauthenticated_message.
       def validate(resource, &block)
+        unless resource
+          ActiveSupport::Deprecation.warn "an empty resource was given to #{self.class.name}#validate. " \
+            "Please ensure the resource is not nil", caller
+        end
+
         result = resource && resource.valid_for_authentication?(&block)
 
         case result
         when Symbol, String
-          ActiveSupport::Deprecation.warn "valid_for_authentication should return a boolean value"
+          ActiveSupport::Deprecation.warn "valid_for_authentication? should return a boolean value"
           fail!(result)
           return false
         end
@@ -84,8 +95,8 @@ module Devise
 
       # Extract the appropriate subhash for authentication from params.
       def params_auth_hash
-         params[scope]
-       end
+        params[scope]
+      end
 
       # Extract a hash with attributes:values from the http params.
       def http_auth_hash

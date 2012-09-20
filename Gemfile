@@ -2,7 +2,7 @@ source "http://rubygems.org"
 
 gemspec
 
-gem "rails", "~> 3.2.0"
+gem "rails", "~> 3.2.6"
 gem "omniauth", "~> 1.0.0"
 gem "omniauth-oauth2", "~> 1.0.0"
 gem "rdoc"
@@ -12,10 +12,6 @@ group :test do
   gem "omniauth-openid", "~> 1.0.1"
   gem "webrat", "0.7.2", :require => false
   gem "mocha", :require => false
-
-  platforms :mri_18 do
-    gem "ruby-debug", ">= 0.10.3"
-  end
 end
 
 platforms :jruby do
@@ -25,7 +21,7 @@ platforms :jruby do
 end
 
 platforms :ruby do
-  gem "sqlite3-ruby"
+  gem "sqlite3"
 
   group :mongoid do
     gem "mongo", "~> 1.3.0"
